@@ -1,0 +1,10 @@
+numpy>=1.24
+scipy>=1.10
+scikit-learn>=1.2
+matplotlib>=3.7
+torch>=1.12
+torchdr>=0.4
+scvelo>=0.3
+transformers>=4.40
+datasets>=2.19
+diffusers>=0.30
