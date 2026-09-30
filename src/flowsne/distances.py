@@ -36,21 +36,31 @@ DriftMode = Literal["frozen", "averaged"]
 
 
 def pairwise_delta(Z: torch.Tensor) -> torch.Tensor:
-    """delta[i, j] = Z[j] - Z[i], shape (n, n, d)."""
+    """delta[i, j] = Z[j] - Z[i], shape (n, n, d). Materialises O(n^2 d)
+    memory -- not used by ``randers_distance`` / ``drift_term``, which
+    only ever form (n, n) matrices; kept as a reference for tests and
+    small-scale inspection."""
     return Z.unsqueeze(0) - Z.unsqueeze(1)
 
 
 def drift_term(
-    delta: torch.Tensor,
+    Z: torch.Tensor,
     omega_field: torch.Tensor,
     mode: DriftMode = "averaged",
 ) -> torch.Tensor:
-    """The omega^T (y - x) term of the Randers distance.
+    """The omega^T (z_j - z_i) term of the Randers distance, computed
+    from (n, n) matrix products only (never the (n, n, d) difference
+    tensor). With ``M = omega_field @ Z.T`` and ``s_i = omega_i . z_i``:
+
+    - frozen:   (z_j - z_i) . omega_i                 = M_ij - s_i
+    - averaged: (z_j - z_i) . (omega_i + omega_j) / 2 = (M_ij - M_ji + s_j - s_i) / 2
+
+    The averaged term is exactly antisymmetric (A_ij = -A_ji), so
+    ``bdF`` is a symmetric distance plus an antisymmetric tilt.
 
     Parameters
     ----------
-    delta : Tensor, shape (n, n, d)
-        ``delta[i, j] = z_j - z_i``.
+    Z : Tensor, shape (n, d)
     omega_field : Tensor, shape (n, d)
         ``omega_field[i]`` is the drift evaluated at ``z_i``.
     mode : {"frozen", "averaged"}
@@ -60,11 +70,12 @@ def drift_term(
     -------
     Tensor, shape (n, n)
     """
+    M = omega_field @ Z.T
+    s = (omega_field * Z).sum(-1)
     if mode == "frozen":
-        return torch.einsum("ijd,id->ij", delta, omega_field)
+        return M - s.unsqueeze(1)
     if mode == "averaged":
-        omega_avg = 0.5 * (omega_field.unsqueeze(1) + omega_field.unsqueeze(0))
-        return torch.einsum("ijd,ijd->ij", delta, omega_avg)
+        return 0.5 * (M - M.T + s.unsqueeze(0) - s.unsqueeze(1))
     raise ValueError(f"mode must be 'frozen' or 'averaged', got {mode!r}")
 
 
@@ -76,13 +87,20 @@ def randers_distance(
 ) -> torch.Tensor:
     """Dense pairwise Randers distance matrix d_F(z_i -> z_j), shape (n, n).
 
-    Not symmetric in general. ``eps`` inside the square root keeps the
-    gradient finite at the (exactly zero) diagonal, where a plain
-    ``.norm()`` has a well-defined forward value but a 0/0 gradient.
+    Not symmetric in general. O(n^2) memory: the squared Euclidean part is
+    expanded as |z_i|^2 + |z_j|^2 - 2 z_i.z_j, clamped at 0 (the expansion
+    can go slightly negative from cancellation), with its diagonal zeroed
+    explicitly (cancellation leaves an O(machine-eps * |z|^2) residue
+    there otherwise). ``eps`` inside the square root keeps the gradient
+    finite at the (exactly zero) diagonal, where a plain ``.norm()`` has a
+    well-defined forward value but a 0/0 gradient.
     """
-    delta = pairwise_delta(Z)
-    norm = torch.sqrt((delta ** 2).sum(-1) + eps)
-    return (norm + drift_term(delta, omega_field, mode=mode)).clamp_min(0.0)
+    n = Z.shape[0]
+    sq = (Z * Z).sum(-1)
+    sqdist = (sq.unsqueeze(1) + sq.unsqueeze(0) - 2.0 * (Z @ Z.T)).clamp_min(0.0)
+    sqdist = sqdist.masked_fill(torch.eye(n, dtype=torch.bool, device=Z.device), 0.0)
+    norm = torch.sqrt(sqdist + eps)
+    return (norm + drift_term(Z, omega_field, mode=mode)).clamp_min(0.0)
 
 
 def bounded_direction(raw: torch.Tensor, max_norm: float, dim: int = -1) -> torch.Tensor:
