@@ -1,0 +1,83 @@
+{
+ "dataset": "swiss",
+ "seed": 1,
+ "n": 1500,
+ "runs": [
+  {
+   "method": "theirs_isomap",
+   "secs": 0.136199951171875,
+   "cos_ref": 0.9745717037304417,
+   "cos_ref_median": 0.9911569413290986,
+   "speed_spearman": 0.11092134707615425,
+   "knn": 0.8574
+  },
+  {
+   "method": "theirs_eig",
+   "secs": 0.46517491340637207,
+   "cos_ref": 0.9993726318195767,
+   "cos_ref_median": 0.999986918924333,
+   "speed_spearman": 0.6728598972710655,
+   "knn": 0.29993333333333333
+  },
+  {
+   "method": "theirs_on_flowsne",
+   "secs": 0.13264107704162598,
+   "cos_ref": 0.8646580803008218,
+   "cos_ref_median": 0.9709607905283365,
+   "speed_spearman": 0.49530364769051016,
+   "knn": 0.6473333333333333
+  },
+  {
+   "method": "flowsne_ds_joint",
+   "secs": 523.6525650024414,
+   "cos_ref": 0.9835255128883815,
+   "cos_ref_median": 0.9954472266553943,
+   "speed_spearman": 0.4349543230908102,
+   "knn": 0.7566666666666667,
+   "loss": 11.52708353661975
+  },
+  {
+   "method": "flowsne_ds_driftonly",
+   "secs": 220.88953804969788,
+   "cos_ref": 0.8168934820594071,
+   "cos_ref_median": 0.9640216023846921,
+   "speed_spearman": 0.01805932535970016,
+   "knn": 0.6473333333333333,
+   "loss": 11.951245525577392
+  },
+  {
+   "method": "flowsne_ds_on_isomap",
+   "secs": 221.5711932182312,
+   "cos_ref": 0.9073976142007467,
+   "cos_ref_median": 0.9940408964516904,
+   "speed_spearman": 0.0480841635929616,
+   "knn": 0.8574
+  },
+  {
+   "method": "flowsne_rs_joint",
+   "secs": 514.4873096942902,
+   "cos_ref": 0.9934507402499887,
+   "cos_ref_median": 0.9984210764817484,
+   "speed_spearman": 0.5108594377153057,
+   "knn": 0.7948666666666666,
+   "loss": 11.475397162491427
+  },
+  {
+   "method": "flowsne_rs_driftonly",
+   "secs": 215.7587161064148,
+   "cos_ref": 0.9012225143816689,
+   "cos_ref_median": 0.9682862813136941,
+   "speed_spearman": 0.13985325326811257,
+   "knn": 0.6279333333333333,
+   "loss": 11.93187256440533
+  },
+  {
+   "method": "flowsne_rs_on_isomap",
+   "secs": 229.23760724067688,
+   "cos_ref": 0.9825438108634501,
+   "cos_ref_median": 0.9940582905583029,
+   "speed_spearman": -0.013814011472893989,
+   "knn": 0.8574
+  }
+ ]
+}

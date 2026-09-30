@@ -1,0 +1,83 @@
+{
+ "dataset": "swiss",
+ "seed": 0,
+ "n": 1500,
+ "runs": [
+  {
+   "method": "theirs_isomap",
+   "secs": 0.10849928855895996,
+   "cos_ref": 0.9757064427402616,
+   "cos_ref_median": 0.9926966528902155,
+   "speed_spearman": 0.19507413469961543,
+   "knn": 0.8445333333333335
+  },
+  {
+   "method": "theirs_eig",
+   "secs": 0.41516900062561035,
+   "cos_ref": 0.9976506823684623,
+   "cos_ref_median": 0.9999862291034408,
+   "speed_spearman": 0.6710525542455796,
+   "knn": 0.28646666666666665
+  },
+  {
+   "method": "theirs_on_flowsne",
+   "secs": 0.09521627426147461,
+   "cos_ref": 0.8963361926749743,
+   "cos_ref_median": 0.9690715149251977,
+   "speed_spearman": 0.2919605599824711,
+   "knn": 0.6807333333333333
+  },
+  {
+   "method": "flowsne_ds_joint",
+   "secs": 612.0485730171204,
+   "cos_ref": 0.980982508279738,
+   "cos_ref_median": 0.9966983692881738,
+   "speed_spearman": 0.4598613599383823,
+   "knn": 0.7396666666666667,
+   "loss": 11.526841644099932
+  },
+  {
+   "method": "flowsne_ds_driftonly",
+   "secs": 251.06280708312988,
+   "cos_ref": 0.8456810026164696,
+   "cos_ref_median": 0.9686232253358802,
+   "speed_spearman": 0.1967759381226392,
+   "knn": 0.6807333333333333,
+   "loss": 11.886559267342673
+  },
+  {
+   "method": "flowsne_ds_on_isomap",
+   "secs": 260.35631585121155,
+   "cos_ref": 0.9127716216079117,
+   "cos_ref_median": 0.9959043670855787,
+   "speed_spearman": 0.06196448620643832,
+   "knn": 0.8445333333333335
+  },
+  {
+   "method": "flowsne_rs_joint",
+   "secs": 607.0432670116425,
+   "cos_ref": 0.9942971997653864,
+   "cos_ref_median": 0.998281422089321,
+   "speed_spearman": 0.5697605412269073,
+   "knn": 0.8080666666666667,
+   "loss": 11.460837595971876
+  },
+  {
+   "method": "flowsne_rs_driftonly",
+   "secs": 253.09688305854797,
+   "cos_ref": 0.9089686910965997,
+   "cos_ref_median": 0.9812270440216411,
+   "speed_spearman": 0.23302925556855805,
+   "knn": 0.6472,
+   "loss": 11.941655662577082
+  },
+  {
+   "method": "flowsne_rs_on_isomap",
+   "secs": 256.2639100551605,
+   "cos_ref": 0.9812915388129477,
+   "cos_ref_median": 0.9937020172138697,
+   "speed_spearman": -0.03733896415065074,
+   "knn": 0.8445333333333335
+  }
+ ]
+}
