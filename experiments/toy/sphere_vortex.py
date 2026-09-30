@@ -5,12 +5,15 @@ equator). A position-varying field, so it specifically tests whether the
 embedding's own drift network can recover direction that changes across
 space, not just a single global preference.
 
-Fits three output kernels against the same input affinity: symmetric
+Fits four output kernels against the same input affinity: symmetric
 (blind to any asymmetry by construction), global (a single learnable
 drift, ConstantFlow -- provably cannot represent a direction that varies
-with position), and neural (input_std_norm_flow -- can).
+with position), and two neural ones that can: input_std_norm_flow, and
+rff_flow (sigma=0.03, 128 Fourier features -- FinslerAffinity's
+sphere-toy calibration, where it recovered the latitude-dependent speed
+better than the plain Tanh network).
 
-Run: conda run -n dev python experiments/toy/sphere_vortex.py
+Run: conda run -n dev python experiments/toy/sphere_vortex.py [--n 1500]
 Writes: experiments/toy/sphere_vortex.png
 """
 
@@ -27,7 +30,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from flowsne import (  # noqa: E402
     EntropicRandersAffinity, RandersAffinity, JointAffinityMatcher,
-    ConstantFlow, input_std_norm_flow,
+    ConstantFlow, input_std_norm_flow, rff_flow,
 )
 from torchdr import AffinityMatcher, NormalizedStudentAffinity  # noqa: E402
 from torchdr.utils import cross_entropy_loss  # noqa: E402
@@ -81,21 +84,27 @@ def main(n=800):
                               degrees_of_freedom=1.0).double()
     Z_neu = fit(out_neu, P, init_np, JointAffinityMatcher, max_iter=3000, lr=0.03, verbose=True)
 
+    out_rff = RandersAffinity(n_components=2, flow=rff_flow(2, hidden_dim=16, n_fourier=128,
+                                                           sigma=0.03),
+                              degrees_of_freedom=1.0).double()
+    Z_rff = fit(out_rff, P, init_np, JointAffinityMatcher, max_iter=2000, lr=0.1, verbose=True)
+
     losses, fields = {}, {}
     for name, out, Z in [("symmetric", out_sym, Z_sym), ("global", out_glob, Z_glob),
-                         ("neural", out_neu, Z_neu)]:
+                         ("neural", out_neu, Z_neu), ("rff", out_rff, Z_rff)]:
         with torch.no_grad():
             losses[name] = cross_entropy_loss(P, out(Z, log=True), log=True).item()
         with torch.no_grad():
             fields[name] = -out.omega_at(Z).numpy() if hasattr(out, "omega_at") else None
     print("losses:", {k: round(v, 4) for k, v in losses.items()})
 
-    om_norm = np.linalg.norm(fields["neural"], axis=1)
-    corr = np.corrcoef(om_norm, speed)[0, 1]
-    print(f"corr(||fitted field||, true speed) = {corr:+.3f}")
+    corrs = {k: np.corrcoef(np.linalg.norm(fields[k], axis=1), speed)[0, 1]
+             for k in ("neural", "rff")}
+    for k, c in corrs.items():
+        print(f"corr(||fitted field||, true speed) [{k}] = {c:+.3f}")
 
-    fig = plt.figure(figsize=(19, 5.4))
-    ax0 = fig.add_subplot(1, 4, 1, projection="3d")
+    fig = plt.figure(figsize=(24, 5.4))
+    ax0 = fig.add_subplot(1, 5, 1, projection="3d")
     ax0.scatter(X_np[:, 0], X_np[:, 1], X_np[:, 2], c=phi, cmap="twilight", s=10)
     step = max(1, n // 130)
     ax0.quiver(X_np[::step, 0], X_np[::step, 1], X_np[::step, 2],
@@ -109,25 +118,36 @@ def main(n=800):
         (Z_sym.detach().numpy(), None, f"symmetric\nloss={losses['symmetric']:.3f}"),
         (Z_glob.detach().numpy(), None, f"global\nloss={losses['global']:.3f}"),
         (Z_neu.detach().numpy(), fields["neural"],
-         f"neural\nloss={losses['neural']:.3f}, corr(||field||,speed)={corr:+.2f}"),
+         f"neural (input std-norm)\nloss={losses['neural']:.3f}, "
+         f"corr(||field||,speed)={corrs['neural']:+.2f}"),
+        (Z_rff.detach().numpy(), fields["rff"],
+         f"neural (RFF, sigma=0.03)\nloss={losses['rff']:.3f}, "
+         f"corr(||field||,speed)={corrs['rff']:+.2f}"),
     ]
+    # Same fixed subset of arrows in every panel (all points still scattered).
+    arrow_idx = np.random.default_rng(0).choice(n, size=min(n, 200), replace=False)
     sca = None
     for j, (Z, om, title) in enumerate(panels):
-        ax = fig.add_subplot(1, 4, j + 2)
+        ax = fig.add_subplot(1, 5, j + 2)
         sca = ax.scatter(Z[:, 0], Z[:, 1], c=phi, cmap="twilight", s=18, zorder=2)
         if om is not None:
             scale = 0.12 * (Z.max(0) - Z.min(0)).max() / max(np.abs(om).max(), 1e-9)
-            ax.quiver(Z[:, 0], Z[:, 1], om[:, 0], om[:, 1], color="crimson",
+            Za, oma = Z[arrow_idx], om[arrow_idx]
+            ax.quiver(Za[:, 0], Za[:, 1], oma[:, 0], oma[:, 1], color="crimson",
                      scale=1.0 / scale, scale_units="xy", angles="xy", width=0.004, zorder=3)
         ax.set_title(title, fontsize=10)
         ax.set_aspect("equal")
         ax.set_xticks([]); ax.set_yticks([])
 
     fig.colorbar(sca, ax=fig.get_axes()[1:], shrink=0.7, pad=0.02, label="azimuth")
-    fig.suptitle("Sphere vortex: symmetric / global / neural output kernels", fontsize=12, y=1.04)
+    fig.suptitle(f"Sphere vortex (n={n}): symmetric / global / neural output kernels",
+                 fontsize=12, y=1.04)
     fig.savefig(OUT_PATH, dpi=150, bbox_inches="tight")
     print(f"saved {OUT_PATH}")
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--n", type=int, default=800)
+    main(n=parser.parse_args().n)
