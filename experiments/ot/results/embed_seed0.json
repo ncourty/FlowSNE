@@ -1,0 +1,143 @@
+{
+ "seed": 0,
+ "n": 600,
+ "d": 50,
+ "coupling_cos_src": 0.9976363157273769,
+ "coupling_relerr_src": 0.02170269288617349,
+ "coupling_cos_tgt": 0.9981773910962893,
+ "frac_diag_mass": 0.9589945054252618,
+ "runs": [
+  {
+   "input": "ds",
+   "output": "symmetric",
+   "loss": 10.989898621926226,
+   "secs": 101.25957298278809,
+   "in_rel_change": 0.11263813544075091,
+   "in_asym": 0.2615888891404165,
+   "in_asym_sym": 0.27014326283642914,
+   "in_align": 0.0879322435825709,
+   "in_align_strong": -0.013614839310134602
+  },
+  {
+   "input": "ds",
+   "output": "global",
+   "loss": 10.989660228550578,
+   "beats_sym": true,
+   "align_partner": 0.03799902672762288,
+   "align_partner_src": 0.03799902672762288,
+   "align_shuffled": 0.015988573430419352,
+   "mean_flow_norm": 0.011459047322690043,
+   "secs": 200.10948204994202
+  },
+  {
+   "input": "ds",
+   "output": "stdnorm32_joint",
+   "loss": 11.019592860798427,
+   "beats_sym": false,
+   "align_partner": 0.4698889395145315,
+   "align_partner_src": 0.4629529131495148,
+   "align_shuffled": -0.0015764777220454121,
+   "mean_flow_norm": 0.04631120693171753,
+   "secs": 410.3327622413635
+  },
+  {
+   "input": "ds",
+   "output": "stdnorm32_driftonly",
+   "loss": 10.988986775470135,
+   "beats_sym": true,
+   "align_partner": 0.5145146630550361,
+   "align_partner_src": 0.508373128243297,
+   "align_shuffled": 0.02090557530553322,
+   "mean_flow_norm": 0.04406180195841449,
+   "secs": 174.9931960105896
+  },
+  {
+   "input": "ds",
+   "output": "gradnet_joint",
+   "loss": 11.015963146424074,
+   "beats_sym": false,
+   "align_partner": 0.29880259031655193,
+   "align_partner_src": 0.3522243412098898,
+   "align_shuffled": -0.010199057771368916,
+   "mean_flow_norm": 0.08866509700576955,
+   "secs": 407.97637128829956
+  },
+  {
+   "input": "ds",
+   "output": "gradnet_driftonly",
+   "loss": 10.987241259725653,
+   "beats_sym": true,
+   "align_partner": 0.35121097943551544,
+   "align_partner_src": 0.39469445097388295,
+   "align_shuffled": -0.0023217147783942786,
+   "mean_flow_norm": 0.07644825564481315,
+   "secs": 157.26999187469482
+  },
+  {
+   "input": "rs",
+   "output": "symmetric",
+   "loss": 11.145545947421358,
+   "secs": 92.83561587333679,
+   "in_rel_change": 0.2461009134169659,
+   "in_asym": 0.49980571196433665,
+   "in_asym_sym": 0.5639292956774109,
+   "in_align": 0.7800252500315651,
+   "in_align_strong": 0.8349319928135438
+  },
+  {
+   "input": "rs",
+   "output": "global",
+   "loss": 11.15842768983672,
+   "beats_sym": false,
+   "align_partner": -0.014049235485948887,
+   "align_partner_src": -0.014049235485948882,
+   "align_shuffled": -0.005976705953687042,
+   "mean_flow_norm": 0.0031678950678793874,
+   "secs": 176.38871812820435
+  },
+  {
+   "input": "rs",
+   "output": "stdnorm32_joint",
+   "loss": 11.125442835555056,
+   "beats_sym": true,
+   "align_partner": 0.05810075836825128,
+   "align_partner_src": 0.07733057994864603,
+   "align_shuffled": 0.007951862897085205,
+   "mean_flow_norm": 0.20439558934264157,
+   "secs": 361.0910589694977
+  },
+  {
+   "input": "rs",
+   "output": "stdnorm32_driftonly",
+   "loss": 11.129459637505759,
+   "beats_sym": true,
+   "align_partner": -0.09036085200797093,
+   "align_partner_src": -0.0683732202485467,
+   "align_shuffled": 0.012379539134651103,
+   "mean_flow_norm": 0.18635610133949612,
+   "secs": 153.57932782173157
+  },
+  {
+   "input": "rs",
+   "output": "gradnet_joint",
+   "loss": 11.12385577181879,
+   "beats_sym": true,
+   "align_partner": 0.10310546476853288,
+   "align_partner_src": 0.12877778187930528,
+   "align_shuffled": -0.010731158561950747,
+   "mean_flow_norm": 0.26739378187977336,
+   "secs": 368.0285360813141
+  },
+  {
+   "input": "rs",
+   "output": "gradnet_driftonly",
+   "loss": 11.123254270116533,
+   "beats_sym": true,
+   "align_partner": 0.004251272502580393,
+   "align_partner_src": 0.02793497924903894,
+   "align_shuffled": -0.008650327588973869,
+   "mean_flow_norm": 0.2233143200051834,
+   "secs": 158.88827109336853
+  }
+ ]
+}

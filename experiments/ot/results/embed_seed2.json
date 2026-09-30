@@ -1,0 +1,143 @@
+{
+ "seed": 2,
+ "n": 600,
+ "d": 50,
+ "coupling_cos_src": 0.9970544971333353,
+ "coupling_relerr_src": 0.022252092762529818,
+ "coupling_cos_tgt": 0.9977069063406774,
+ "frac_diag_mass": 0.9524463813062878,
+ "runs": [
+  {
+   "input": "ds",
+   "output": "symmetric",
+   "loss": 11.002602855941554,
+   "secs": 101.38930201530457,
+   "in_rel_change": 0.11201626082856915,
+   "in_asym": 0.2615364367414451,
+   "in_asym_sym": 0.2771767385410408,
+   "in_align": 0.11705383003432089,
+   "in_align_strong": -0.015242158593078786
+  },
+  {
+   "input": "ds",
+   "output": "global",
+   "loss": 11.00278885510194,
+   "beats_sym": false,
+   "align_partner": 0.05682818242545137,
+   "align_partner_src": 0.05682818242545137,
+   "align_shuffled": -0.010626803261462921,
+   "mean_flow_norm": 0.001992185010090433,
+   "secs": 199.72167468070984
+  },
+  {
+   "input": "ds",
+   "output": "stdnorm32_joint",
+   "loss": 11.056888548739291,
+   "beats_sym": false,
+   "align_partner": 0.3856592881563788,
+   "align_partner_src": 0.36997095386102835,
+   "align_shuffled": -0.0068693557626264305,
+   "mean_flow_norm": 0.04096728381283921,
+   "secs": 409.984023809433
+  },
+  {
+   "input": "ds",
+   "output": "stdnorm32_driftonly",
+   "loss": 11.00177186672613,
+   "beats_sym": true,
+   "align_partner": 0.3467982890708692,
+   "align_partner_src": 0.3342160436011347,
+   "align_shuffled": 0.006678519032405162,
+   "mean_flow_norm": 0.036771482376693594,
+   "secs": 174.70810794830322
+  },
+  {
+   "input": "ds",
+   "output": "gradnet_joint",
+   "loss": 11.053055554223153,
+   "beats_sym": false,
+   "align_partner": 0.39112493606292237,
+   "align_partner_src": 0.426466630198349,
+   "align_shuffled": -0.016897502704108128,
+   "mean_flow_norm": 0.10710413093540677,
+   "secs": 407.32409381866455
+  },
+  {
+   "input": "ds",
+   "output": "gradnet_driftonly",
+   "loss": 10.999209377062419,
+   "beats_sym": true,
+   "align_partner": 0.3999233930267201,
+   "align_partner_src": 0.4050251832087855,
+   "align_shuffled": -0.020934304675673292,
+   "mean_flow_norm": 0.09093879766482131,
+   "secs": 156.96941494941711
+  },
+  {
+   "input": "rs",
+   "output": "symmetric",
+   "loss": 11.182139211440546,
+   "secs": 92.73917007446289,
+   "in_rel_change": 0.23054332770886685,
+   "in_asym": 0.5029340352410978,
+   "in_asym_sym": 0.5951281015313907,
+   "in_align": 0.7572018423262292,
+   "in_align_strong": 0.8070838805602486
+  },
+  {
+   "input": "rs",
+   "output": "global",
+   "loss": 11.179382098289556,
+   "beats_sym": true,
+   "align_partner": -0.013032819589830158,
+   "align_partner_src": -0.013032819589830165,
+   "align_shuffled": -0.01583466431952613,
+   "mean_flow_norm": 0.037479159819998435,
+   "secs": 175.9250898361206
+  },
+  {
+   "input": "rs",
+   "output": "stdnorm32_joint",
+   "loss": 11.204055802667181,
+   "beats_sym": false,
+   "align_partner": -0.08952748582879946,
+   "align_partner_src": -0.06658412548862633,
+   "align_shuffled": -0.005663505026140499,
+   "mean_flow_norm": 0.2135321327311927,
+   "secs": 360.3041069507599
+  },
+  {
+   "input": "rs",
+   "output": "stdnorm32_driftonly",
+   "loss": 11.166135701122476,
+   "beats_sym": true,
+   "align_partner": -0.1923232671907582,
+   "align_partner_src": -0.17254463583586827,
+   "align_shuffled": -0.014417480692303834,
+   "mean_flow_norm": 0.17372560046112115,
+   "secs": 153.8106701374054
+  },
+  {
+   "input": "rs",
+   "output": "gradnet_joint",
+   "loss": 11.19617864917533,
+   "beats_sym": false,
+   "align_partner": 0.061192623159629776,
+   "align_partner_src": 0.07704720614833672,
+   "align_shuffled": -0.03061002689125021,
+   "mean_flow_norm": 0.31772159370330383,
+   "secs": 367.2762670516968
+  },
+  {
+   "input": "rs",
+   "output": "gradnet_driftonly",
+   "loss": 11.15982800168426,
+   "beats_sym": true,
+   "align_partner": -0.08674344288836804,
+   "align_partner_src": -0.05354729147851389,
+   "align_shuffled": -0.040558786499684134,
+   "mean_flow_norm": 0.20739232016825174,
+   "secs": 159.4324278831482
+  }
+ ]
+}
