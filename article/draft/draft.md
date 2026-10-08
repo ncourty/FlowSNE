@@ -343,8 +343,10 @@ collapses to a 1-D curve on the Swiss roll and on pancreas (kNN 0.26–0.32).
   A 3000-iteration fit at 100k takes about 18 minutes. Quality holds at scale:
   a 50k fit with 3000 iterations and the default perplexity √n recovers the
   true speed with correlation +0.94 (vs +0.89 at n = 1500), in 13 minutes.
-  A 1000-iteration fit at perplexity 50 reached only +0.79; which of the two
-  changes matters is not yet separated. Details: `benchmarks/RESULTS.md`.
+  The perplexity is what matters: at perplexity 50, 1000 iterations give
+  +0.79 and 3000 give only +0.82, so the √n default is justified at scale
+  despite its cost (802 s vs 356 s for 3000 iterations). Details:
+  `benchmarks/RESULTS.md`.
 - **Legacy domain experiments**, carried over from FinslerAffinity and **not
   re-run or re-checked in this repo**:
   - pancreas: forward-time bias +0.008 ± 0.061 (neural) vs −0.001 ± 0.043

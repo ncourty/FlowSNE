@@ -1,7 +1,7 @@
 # GPU benchmark results
 
 Produced by `benchmarks/gpu_benchmark.py` (see its docstring for what is
-measured). Two runs so far, same machine.
+measured). Three runs so far, same machine.
 
 ## Run 1: RTX 2080 Ti, 9 Oct 2026
 
@@ -75,10 +75,32 @@ With `--perplexity auto` (√n ≈ 224, k = 1119 neighbours):
   perplexity, the fitted field's speed correlation is +0.94 at 50k, above the
   +0.89 obtained at n = 1500.
 - **Confounded:** iterations and perplexity changed together, so the gain
-  over run 1 cannot be attributed yet. To separate them:
-  `--perplexity 50 --fit-iters 3000` (about 6 min on this card).
+  over run 1 cannot be attributed from this run alone (separated by run 3).
 - **Cost of a large k:** KeOps' kNN search (`argKmin`) is the step that
   suffers, 14× slower at k = 1119 than at k = 250; each fit step is 2× slower
-  (the O(nk) attraction term) and memory 2.6× higher. If perplexity 50 with
-  3000 iterations matches the +0.94, a capped perplexity is the better
-  default at scale.
+  (the O(nk) attraction term) and memory 2.6× higher.
+
+## Run 3: separating iterations from perplexity, 9 Oct 2026
+
+`python benchmarks/gpu_benchmark.py --sizes 50000 --fit-n 50000 --fit-iters 3000 --perplexity 50`
+(script with the KeOps-on-GPU check, which passed with a relative error below
+1e-7; correctness and the n = 50k timings are identical to run 1: input
+affinity 8.08 s, 0.1106 s/step, peak 1.21 GB).
+
+End-to-end fit, n = 50,000, KeOps:
+
+| | 1000 iterations | 3000 iterations |
+|---|---|---|
+| perplexity 50 (k = 250) | corr +0.79 (run 1, 124 s) | corr **+0.82** (this run, 356 s, loss 17.17) |
+| perplexity √n ≈ 224 (k = 1119) | – | corr **+0.94** (run 2, 802 s, loss 17.58) |
+
+### Reading
+
+- **Perplexity is what matters:** tripling the iterations adds +0.03; moving
+  to the √n perplexity adds +0.12. A wider neighbourhood is what lets the
+  flow recover the drift's magnitude at this scale.
+- **Do not cap the perplexity at 50 to save time:** it halves the fit's cost
+  (356 s vs 802 s) but gives up most of the quality. The √n default is
+  justified here; an intermediate value (e.g. 100) is untested.
+- Losses are not comparable across runs with different perplexities (each
+  has its own input affinity P).
