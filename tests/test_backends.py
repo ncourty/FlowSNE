@@ -251,3 +251,118 @@ def test_float32_no_nans(ds):
     n = X.shape[0]
     assert (P.sum(1) * n - 1).abs().max().item() < 1e-3
     assert (P.sum(0) * n - 1).abs().max().item() < (1e-3 if ds else 1.0)
+
+
+# --- output kernel, sparse loss, fitting (step 4) ----------------------------
+
+from flowsne import RandersAffinity, JointAffinityMatcher, fit_drift_only, fit_embedding  # noqa: E402
+from flowsne.flows import input_std_norm_flow  # noqa: E402
+
+
+def _out(backend=None, seed=0):
+    torch.manual_seed(seed)
+    flow = input_std_norm_flow(2, hidden_dim=16)
+    last = [m for m in flow.modules() if isinstance(m, torch.nn.Linear)][-1]
+    torch.nn.init.normal_(last.weight, std=0.3)          # non-zero field, so drift terms matter
+    return RandersAffinity(n_components=2, flow=flow, backend=backend).double()
+
+
+def _problem(n=200, ds=False):
+    X, V = _sphere(n=n)
+    P_s, idx = EntropicRandersAffinity(omega=V, doubly_stochastic=ds, sparsity=True,
+                                       sinkhorn_iters=2000)(X)
+    P_d = torch.zeros(n, n, dtype=DT).scatter_add_(1, idx, P_s)
+    Z = torch.randn(n, 2, generator=torch.Generator().manual_seed(3), dtype=DT)
+    return X, P_s, idx, P_d, Z
+
+
+def _loss_and_grads(aff, Z, P, idx):
+    Z = Z.clone().requires_grad_()
+    aff.zero_grad()
+    loss = aff.cross_entropy(Z, P, idx)
+    loss.backward()
+    return loss.detach(), Z.grad, [q.grad.clone() for q in aff.parameters()]
+
+
+@pytest.mark.parametrize("ds", [False, True])
+def test_sparse_loss_equals_dense_loss(ds):
+    from torchdr.utils import cross_entropy_loss
+    _, P_s, idx, P_d, Z = _problem(ds=ds)
+    aff = _out()
+    l_s, gz_s, gp_s = _loss_and_grads(aff, Z, P_s, idx)
+    l_d, gz_d, gp_d = _loss_and_grads(aff, Z, P_d, None)
+    torch.testing.assert_close(l_s, l_d, rtol=1e-12, atol=1e-12)
+    torch.testing.assert_close(gz_s, gz_d, rtol=1e-9, atol=1e-12)
+    for a, b in zip(gp_s, gp_d):
+        torch.testing.assert_close(a, b, rtol=1e-9, atol=1e-12)
+    # and equal to TorchDR's own -sum P log Q on the normalised kernel
+    with torch.no_grad():
+        ref = cross_entropy_loss(P_d, aff(Z, log=True), log=True).reshape(())
+    torch.testing.assert_close(l_d, ref, rtol=1e-12, atol=1e-12)
+
+
+def test_keops_loss_and_gradients_match_dense():
+    _, P_s, idx, _, Z = _problem()
+    l_d, gz_d, gp_d = _loss_and_grads(_out(None), Z, P_s, idx)
+    l_k, gz_k, gp_k = _loss_and_grads(_out("keops"), Z, P_s, idx)
+    torch.testing.assert_close(l_k, l_d, rtol=1e-12, atol=1e-12)
+    torch.testing.assert_close(gz_k, gz_d, rtol=1e-9, atol=1e-12)
+    for a, b in zip(gp_k, gp_d):
+        torch.testing.assert_close(a, b, rtol=1e-9, atol=1e-12)
+
+
+def test_keops_output_kernel_matches_dense():
+    _, _, _, _, Z = _problem()
+    with torch.no_grad():
+        Q_d = _out(None)(Z)
+        Q_k = _out("keops")(Z)
+    torch.testing.assert_close(Q_k.sum(dim=1).squeeze(1), Q_d.sum(1), rtol=1e-10, atol=1e-14)
+
+
+@pytest.mark.parametrize("iters, rtol", [(1, 1e-12), (40, 1e-5)])
+def test_fit_embedding_reproduces_joint_affinity_matcher(iters, rtol):
+    # Same loop, same loss value; the two loss formulas sum in a different
+    # order, and Adam's 1/sqrt(v) amplifies those 1e-16 differences on
+    # coordinates with tiny gradients (identical to 2e-16 after one step,
+    # ~1e-9 from step 2) -- hence a looser check after 40 steps; a formula
+    # bug would already break the one-step check.
+    X, _, _, P_d, _ = _problem()
+    init = X[:, :2].numpy()
+    aff1, aff2 = _out(seed=1), _out(seed=1)
+    Z_ref = JointAffinityMatcher(
+        affinity_in="precomputed", affinity_out=aff1, n_components=2,
+        loss_fn="cross_entropy_loss", optimizer="Adam", lr=0.05, max_iter=iters,
+        init=init, init_scaling=1.0, random_state=0, verbose=False,
+    ).fit_transform(P_d).detach()
+    Z_new = fit_embedding(aff2, P_d, init, max_iter=iters, lr=0.05, seed=0)
+    assert ((Z_new - Z_ref).abs().max() / Z_ref.abs().max()).item() < rtol
+
+
+@pytest.mark.parametrize("backend", [None, "keops"])
+def test_fit_embedding_sparse_matches_dense(backend):
+    X, P_s, idx, P_d, _ = _problem()
+    init = X[:, :2]
+    Z_dense = fit_embedding(_out(None, seed=2), P_d, init, max_iter=40, lr=0.05)
+    Z_sparse = fit_embedding(_out(backend, seed=2), P_s, init, indices=idx, max_iter=40, lr=0.05)
+    torch.testing.assert_close(Z_sparse, Z_dense, rtol=1e-7, atol=1e-9)
+
+
+def test_fit_drift_only_matches_previous_implementation():
+    from torchdr.utils import cross_entropy_loss
+    _, P_s, idx, P_d, Z = _problem()
+    aff_old, aff_new = _out(seed=4), _out(seed=4)
+    torch.manual_seed(0)                                  # the previous loop, verbatim
+    opt = torch.optim.Adam(aff_old.parameters(), lr=0.05)
+    for _ in range(30):
+        opt.zero_grad()
+        cross_entropy_loss(P_d, aff_old(Z, log=True), log=True).backward()
+        opt.step()
+    fit_drift_only(aff_new, P_s, Z, max_iter=30, lr=0.05, indices=idx)
+    for a, b in zip(aff_new.parameters(), aff_old.parameters()):
+        torch.testing.assert_close(a, b, rtol=1e-7, atol=1e-9)
+
+
+def test_dense_P_with_keops_raises():
+    _, _, _, P_d, Z = _problem()
+    with pytest.raises(NotImplementedError):
+        _out("keops").cross_entropy(Z, P_d)

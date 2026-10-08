@@ -17,7 +17,7 @@ from .flows import (
     rff_flow,
 )
 from .affinity import EntropicRandersAffinity, RandersAffinity
-from .embedding import JointAffinityMatcher, fit_drift_only
+from .embedding import JointAffinityMatcher, fit_drift_only, fit_embedding
 
 __all__ = [
     "randers_distance",
@@ -38,4 +38,5 @@ __all__ = [
     "RandersAffinity",
     "JointAffinityMatcher",
     "fit_drift_only",
+    "fit_embedding",
 ]

@@ -35,12 +35,52 @@ class JointAffinityMatcher(AffinityMatcher):
         return self.params_
 
 
+def fit_embedding(affinity_out, P, init, indices=None, max_iter: int = 1500, lr: float = 0.1,
+                  init_scaling: float = 1.0, seed: int = 0, train_embedding: bool = True,
+                  train_flow: bool = True):
+    """Fit an embedding (and/or ``affinity_out``'s flow) by Adam on
+    ``affinity_out.cross_entropy(Z, P, indices)`` -- dense ``P`` (n, n) or
+    sparse ``P`` (n, k) + ``indices`` (``EntropicRandersAffinity(sparsity=
+    True)``), with either backend of ``RandersAffinity``.
+
+    Reproduces TorchDR's ``AffinityMatcher`` loop step for step (init scaled
+    to ``init_scaling`` std on the first coordinate, one Adam optimiser with
+    the embedding and the flow parameters as two groups at the same ``lr``),
+    so with a dense ``P`` it matches ``JointAffinityMatcher`` -- the point of
+    this function is the sparse / KeOps path, which TorchDR's matcher does not
+    accept for a precomputed affinity.
+
+    ``train_embedding=False`` keeps ``init`` as the embedding (no rescaling)
+    and fits the flow only (``fit_drift_only``); ``train_flow=False`` with a
+    zero-initialised flow gives the symmetric Student baseline.
+    """
+    torch.manual_seed(seed)
+    Z = torch.as_tensor(init).to(dtype=P.dtype, device=P.device).detach().clone()
+    if train_embedding:
+        Z = init_scaling * Z / Z[:, 0].std()
+    Z.requires_grad_(train_embedding)
+    groups = []
+    if train_embedding:
+        groups.append({"params": [Z]})
+    if train_flow:
+        flow_params = [q for q in affinity_out.parameters() if q.requires_grad]
+        if flow_params:
+            groups.append({"params": flow_params})
+    if not groups:
+        raise ValueError("fit_embedding: nothing to train.")
+    opt = torch.optim.Adam(groups, lr=lr)
+    for _ in range(max_iter):
+        opt.zero_grad(set_to_none=True)
+        affinity_out.cross_entropy(Z, P, indices).backward()
+        opt.step()
+    return Z.detach()
+
+
 def fit_drift_only(affinity_out, P, Z_fixed, seed: int = 0, max_iter: int = 1500,
-                   lr: float = 0.05):
+                   lr: float = 0.05, indices=None):
     """Freeze the embedding at ``Z_fixed`` and fit only ``affinity_out``'s
-    own parameters (e.g. a flow network) against it, via plain Adam --
-    no ``AffinityMatcher`` machinery needed since nothing about the
-    embedding coordinates is being optimised.
+    own parameters (e.g. a flow network) against it, via plain Adam.
+    ``P`` dense (n, n), or sparse (n, k) with its ``indices``.
 
     The correct fallback when a joint (Z, flow) fit is unstable: fit the
     symmetric embedding to convergence first, then call this with its
@@ -48,15 +88,5 @@ def fit_drift_only(affinity_out, P, Z_fixed, seed: int = 0, max_iter: int = 1500
     is actually needed (MNIST) versus when a plain joint fit works fine
     (the toy examples, single-cell data).
     """
-    from torchdr.utils import cross_entropy_loss
-
-    torch.manual_seed(seed)
-    Z = Z_fixed.detach().clone()
-    opt = torch.optim.Adam(affinity_out.parameters(), lr=lr)
-    for _ in range(max_iter):
-        opt.zero_grad()
-        log_Q = affinity_out(Z, log=True)
-        loss = cross_entropy_loss(P, log_Q, log=True)
-        loss.backward()
-        opt.step()
-    return Z
+    return fit_embedding(affinity_out, P, Z_fixed, indices=indices, max_iter=max_iter, lr=lr,
+                         seed=seed, train_embedding=False)

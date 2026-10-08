@@ -35,8 +35,8 @@ from torchdr.affinity.entropic import NormalizedStudentAffinity
 from torchdr.utils import to_torch
 
 from .distances import (
-    DriftMode, bounded_direction, randers_distance, randers_distance_pairs, randers_knn,
-    rescale_admissible,
+    DriftMode, bounded_direction, randers_distance, randers_distance_indexed,
+    randers_distance_lazy, randers_distance_pairs, randers_knn, rescale_admissible,
 )
 
 
@@ -418,6 +418,11 @@ class RandersAffinity(NormalizedStudentAffinity):
     max_omega_norm : float, optional
         Admissibility bound :math:`\rho` on :math:`\lVert\omega\rVert`.
         Default 0.95.
+    backend : {None, "keops"}, optional
+        Dense (n, n) cost (None, default) or a KeOps LazyTensor with O(n)
+        memory ("keops"); ``self(Z)`` then returns a LazyTensor, and
+        ``cross_entropy`` computes its normaliser lazily. Same values and
+        gradients either way.
     degrees_of_freedom, zero_diag, normalization_dim, device, verbose,
     compile, _pre_processed : see ``torchdr.NormalizedStudentAffinity``.
     """
@@ -434,13 +439,18 @@ class RandersAffinity(NormalizedStudentAffinity):
         zero_diag: bool = True,
         normalization_dim: Union[int, Tuple[int, ...]] = (0, 1),
         device: str = "auto",
+        backend: Optional[str] = None,
         verbose: bool = False,
         compile: bool = False,
         _pre_processed: bool = False,
     ):
+        if backend not in (None, "keops"):
+            raise ValueError(
+                f"[RandersAffinity] backend must be None or 'keops', got {backend!r}."
+            )
         super().__init__(
             degrees_of_freedom=degrees_of_freedom, metric="sqeuclidean",
-            zero_diag=zero_diag, device=device, backend=None, verbose=verbose,
+            zero_diag=zero_diag, device=device, backend=backend, verbose=verbose,
             normalization_dim=normalization_dim, compile=compile,
             _pre_processed=_pre_processed,
         )
@@ -478,6 +488,19 @@ class RandersAffinity(NormalizedStudentAffinity):
                 f"expected n_components={self.n_components}."
             )
         omega_field = self.omega_at(Z).to(dtype=Z.dtype, device=Z.device)
+        return self._cost(Z, omega_field)
+
+    def _cost(self, Z: torch.Tensor, omega_field: torch.Tensor):
+        """Squared Randers cost, dense or lazy, diagonal excluded with a
+        large finite sentinel if ``zero_diag``."""
+        n = Z.shape[0]
+        if self.backend == "keops":
+            from torchdr.utils import identity_matrix
+
+            C_F = randers_distance_lazy(Z, omega_field, mode=self.drift_mode) ** 2
+            if self.zero_diag:
+                C_F = C_F + identity_matrix(n, keops=True, device=Z.device, dtype=Z.dtype) * 1e12
+            return C_F
         d_F = randers_distance(Z, omega_field, mode=self.drift_mode)
         C_F = d_F ** 2
 
@@ -490,3 +513,40 @@ class RandersAffinity(NormalizedStudentAffinity):
             C_F = C_F.masked_fill(diag_mask, 1e12)
 
         return C_F
+
+    def _log_kernel(self, C):
+        """Unnormalised Student log-kernel, as in NormalizedStudentAffinity."""
+        nu = self.degrees_of_freedom
+        return -0.5 * (nu + 1) * (C / nu + 1).log()
+
+    def cross_entropy(self, Z: torch.Tensor, P: torch.Tensor,
+                      indices: Optional[torch.Tensor] = None) -> torch.Tensor:
+        r"""Cross-entropy :math:`-\sum_{ij} P_{ij} \log Q_{ij}` against this
+        kernel, with ``Q`` normalised over all pairs.
+
+        Dense ``P`` (n, n), ``indices=None``: the plain formula. Sparse ``P``
+        (n, k) with ``indices`` (n, k) (``EntropicRandersAffinity(sparsity=
+        True)`` output): attraction on the kept entries plus
+        :math:`(\sum P)\,\log Z`, the normaliser over all pairs computed
+        densely or lazily (``backend="keops"``) -- never an (n, n) tensor in
+        the KeOps case. Exactly equal to the dense loss on the densified P.
+        """
+        if self.normalization_dim not in ((0, 1), (1, 0)):
+            raise NotImplementedError(
+                "[RandersAffinity] cross_entropy assumes normalization_dim=(0, 1)."
+            )
+        omega = self.omega_at(Z).to(dtype=Z.dtype, device=Z.device)
+        log_kernel = self._log_kernel(self._cost(Z, omega))
+        if self.backend == "keops":
+            log_Z = torch.logsumexp(log_kernel.logsumexp(dim=1).reshape(-1), dim=0)
+        else:
+            log_Z = torch.logsumexp(log_kernel.reshape(-1), dim=0)
+        if indices is None:
+            if self.backend == "keops":
+                raise NotImplementedError(
+                    "[RandersAffinity] a dense P with backend='keops' would need "
+                    "the (n, n) kernel; pass a sparse P with its indices."
+                )
+            return -(P * log_kernel).sum() + P.sum() * log_Z
+        d = randers_distance_indexed(Z, omega, indices, mode=self.drift_mode)
+        return -(P * self._log_kernel(d ** 2)).sum() + P.sum() * log_Z

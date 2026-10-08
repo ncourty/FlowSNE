@@ -114,7 +114,16 @@ itself, so a custom flow only needs to output a raw, unconstrained vector.
    sparse mode. Balanced sparse runs Sinkhorn on kNN + reverse edges and is a
    *local* variant of balancing, not an approximation of the dense one (on
    full pancreas: median row TV 8%, a few rows completely different, for
-   any k). The output kernel and loss do not have a KeOps path yet.
+   any k). On the output side, `RandersAffinity(backend="keops")` makes the
+   cost lazy, and `RandersAffinity.cross_entropy(Z, P, indices)` computes
+   the loss on a sparse P (attraction on the kept entries + ΣP·log Z, the
+   normaliser lazy under KeOps) — exactly the dense loss on the densified P.
+   TorchDR's matcher rejects a rectangular precomputed P, so sparse fits go
+   through `flowsne.embedding.fit_embedding` (a step-for-step copy of
+   TorchDR's loop; `fit_drift_only` wraps it). On this M4 CPU KeOps already
+   wins from n ≈ 10k (2.5 s/step vs 7 s dense; 10 s at 20k, where dense
+   no longer fits); on CPU KeOps runs without OpenMP unless `libomp` is
+   installed via Homebrew.
 
 ## Layout
 
