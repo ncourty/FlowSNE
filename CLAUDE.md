@@ -123,7 +123,13 @@ itself, so a custom flow only needs to output a raw, unconstrained vector.
    TorchDR's loop; `fit_drift_only` wraps it). On this M4 CPU KeOps already
    wins from n ≈ 10k (2.5 s/step vs 7 s dense; 10 s at 20k, where dense
    no longer fits); on CPU KeOps runs without OpenMP unless `libomp` is
-   installed via Homebrew.
+   installed via Homebrew. On a GPU (RTX 2080 Ti, float32, k = 250):
+   0.020 s/step at 10k (dense 0.097 s), 0.36 s/step at 100k with 1.7 GB peak
+   memory — see `benchmarks/RESULTS.md`. GPU pitfall: if KeOps' engine
+   compiles against an older CUDA toolkit's `nvrtc.h` than the runtime it
+   detects (errors about `nvrtcGetCUBIN`), point `CUDA_PATH`/`CUDA_HOME` at
+   headers matching torch's CUDA and run `pykeops.clean_pykeops()`;
+   `benchmarks/gpu_benchmark.py` now checks this before timing anything.
 
 ## Layout
 
@@ -139,6 +145,9 @@ itself, so a custom flow only needs to output a raw, unconstrained vector.
   here uses only `flowsne`'s public API — no heat-kernel code paths, no
   exploratory narration; see `FinslerAffinity/CLAUDE.md` for the full
   history of what was tried and why each domain's current setup won out.
+- `benchmarks/` — `gpu_benchmark.py` (environment + KeOps-on-GPU check,
+  dense vs KeOps correctness, scaling vs n, optional full fit; writes JSON to
+  `benchmarks/results/`) and `RESULTS.md` (runs so far).
 - `tests/` — `test_backends.py`: dense vs KeOps equivalence, sparse
   affinities, log-domain Sinkhorn vs the previous implementation, float32.
   Run with `conda run -n dev python -m pytest tests/ -q`.

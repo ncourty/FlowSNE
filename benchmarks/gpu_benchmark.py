@@ -56,6 +56,22 @@ sys.path.insert(0, os.path.join(HERE, "..", "src"))
 # Environment
 # ===========================================================================
 
+def keops_gpu_check():
+    """Run a tiny KeOps reduction on the GPU and compare it with torch.
+    ``pykeops.config.gpu_available`` only says the CUDA libraries were found;
+    this catches a KeOps engine that failed to build (e.g. compiled against
+    an older CUDA toolkit's nvrtc.h than the runtime it detected)."""
+    from pykeops.torch import LazyTensor
+    g = torch.Generator(device="cuda").manual_seed(0)
+    x = torch.randn(1000, 3, device="cuda", generator=g)
+    ref = torch.exp(-torch.cdist(x, x) ** 2).sum(1)
+    xi, xj = LazyTensor(x[:, None, :]), LazyTensor(x[None, :, :])
+    got = (-((xi - xj) ** 2).sum(-1)).exp().sum(dim=1).squeeze(1)
+    if got.device.type != "cuda":
+        raise RuntimeError(f"KeOps returned a result on {got.device}, not on the GPU")
+    return ((got - ref).abs().max() / ref.abs().max()).item()
+
+
 def environment(allow_cpu: bool) -> dict:
     env = dict(host=socket.gethostname(), platform=platform.platform(),
                python=sys.version.split()[0], torch=torch.__version__,
@@ -95,6 +111,20 @@ def environment(allow_cpu: bool) -> dict:
     if env["cuda_available"] and env.get("pykeops_gpu_available") is False:
         problems.append("pykeops does not see the GPU (CUDA libraries / nvrtc not found): KeOps "
                         "would silently run on CPU. Check your CUDA toolkit install.")
+    if env["cuda_available"] and env["pykeops"] and env.get("pykeops_gpu_available") is True:
+        try:
+            env["keops_gpu_check_rel_err"] = keops_gpu_check()
+            if not env["keops_gpu_check_rel_err"] < 1e-4:
+                raise RuntimeError(f"relative error {env['keops_gpu_check_rel_err']:.1e}")
+        except Exception as e:  # noqa: BLE001
+            env["keops_gpu_check_rel_err"] = None
+            problems.append(
+                f"KeOps failed a test reduction on the GPU ({e!r}). Most likely its engine was "
+                "compiled against CUDA headers older than the runtime it detected (e.g. errors "
+                "about nvrtcGetCUBIN). Point it at headers matching torch's CUDA, e.g. "
+                "`conda install -c nvidia cuda-nvrtc-dev=<ver> cuda-cudart-dev=<ver>` and "
+                "`export CUDA_PATH=$CONDA_PREFIX CUDA_HOME=$CONDA_PREFIX`, then "
+                "`python -c \"import pykeops; pykeops.clean_pykeops()\"` and re-run.")
     if problems:
         print("\n".join("!! " + p for p in problems))
         sys.exit(1)

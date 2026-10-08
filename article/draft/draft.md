@@ -332,6 +332,19 @@ collapses to a 1-D curve on the Swiss roll and on pancreas (kNN 0.26–0.32).
   (n, n, d) one to about 1e-15, in values and gradients. It is about 100×
   faster at n = 2000, d = 100 (0.07 s vs 7.5 s; the old version also needed a
   3.2 GB tensor).
+- **Scaling (KeOps backend, sparse input affinity).** Both affinities now have
+  a KeOps backend with O(n) memory, and the input affinity can be sparse (each
+  row's 5 × perplexity nearest points under the directed cost). Dense and
+  KeOps agree to 1e-15 in float64 on losses and gradients, and a full
+  sphere-vortex fit gives the same loss (11.5931 vs 11.5930) and speed
+  correlation (+0.886 vs +0.887) either way. On an RTX 2080 Ti (float32,
+  k = 250): 0.020 s per fit step at 10k points (dense: 0.097 s), 0.36 s at
+  100k, with peak memory 1.7 GB at 100k (dense would need about 240 GB).
+  A 3000-iteration fit at 100k takes about 18 minutes. Quality holds at scale:
+  a 50k fit with 3000 iterations and the default perplexity √n recovers the
+  true speed with correlation +0.94 (vs +0.89 at n = 1500), in 13 minutes.
+  A 1000-iteration fit at perplexity 50 reached only +0.79; which of the two
+  changes matters is not yet separated. Details: `benchmarks/RESULTS.md`.
 - **Legacy domain experiments**, carried over from FinslerAffinity and **not
   re-run or re-checked in this repo**:
   - pancreas: forward-time bias +0.008 ± 0.061 (neural) vs −0.001 ± 0.043
@@ -372,7 +385,9 @@ collapses to a 1-D curve on the Swiss roll and on pancreas (kNN 0.26–0.32).
 - No win on drift direction against a nearly free estimator.
 - Joint fits are fragile (MNIST; OT cross-affinity runs rarely beat the
   symmetric loss).
-- O(n²) dense: tested only up to about 2000 points.
+- Scale: 10⁵ points fit on one consumer GPU, and a 50k fit keeps its quality
+  (§6), but only on a synthetic toy; 10⁶ would need an approximate repulsion
+  term, and a large perplexity makes the kNN search slow (110 s at 50k).
 - Real-data evaluation is thin. Pancreas is the only real dataset re-checked.
   Pseudotime alignment doesn't separate the methods (0.3–0.4 for all).
 - The OT direction-only term is tested only on synthetic clusters, and its
@@ -382,7 +397,7 @@ collapses to a 1-D curve on the Swiss roll and on pancreas (kNN 0.26–0.32).
 **Needed whatever the venue:** re-run and re-evaluate the legacy domain
 experiments; a second real dataset in the baseline comparison (dentate gyrus);
 OT on real feature distributions; a write-up of §3 as a proposition with its
-attenuation counterpart; scaling (kNN-sparse affinities).
+attenuation counterpart; fits at 10⁴–10⁵ points on real data.
 **For CVPR specifically:** one flagship vision experiment, for example the
 velocity field of an image generative model, or OT between image feature
 distributions.
