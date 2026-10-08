@@ -24,6 +24,7 @@ graph/heat-kernel diffusion proxy.
 from __future__ import annotations
 
 import math
+import warnings
 from typing import Optional, Tuple, Union
 
 import torch
@@ -31,8 +32,20 @@ import torch.nn as nn
 
 from torchdr.affinity.base import LogAffinity
 from torchdr.affinity.entropic import NormalizedStudentAffinity
+from torchdr.utils import to_torch
 
-from .distances import DriftMode, bounded_direction, randers_distance, rescale_admissible
+from .distances import (
+    DriftMode, bounded_direction, randers_distance, randers_distance_pairs, randers_knn,
+    rescale_admissible,
+)
+
+
+def _segment_logsumexp(values: torch.Tensor, segments: torch.Tensor, n: int) -> torch.Tensor:
+    """``out[s] = logsumexp(values[segments == s])`` for s in range(n)."""
+    m = values.new_full((n,), -math.inf).scatter_reduce(
+        0, segments, values, reduce="amax", include_self=True)
+    s = values.new_zeros(n).scatter_add(0, segments, torch.exp(values - m[segments]))
+    return m + s.log()
 from .flows import mlp_flow
 
 
@@ -84,8 +97,12 @@ class EntropicRandersAffinity(LogAffinity):
         Sinkhorn-balance to uniform marginals (default True) or leave as a
         plain row-stochastic softmax (False). See above.
     sinkhorn_iters, sinkhorn_tol : optional
-        Sinkhorn iteration budget / early-stop tolerance (only used if
-        ``doubly_stochastic=True``).
+        Sinkhorn iteration budget / early-stop tolerance on the log-domain
+        potentials (only used if ``doubly_stochastic=True``). Default 5000:
+        a tight perplexity bandwidth makes the kernel badly conditioned, and
+        200 iterations left the marginals of every single-cell dataset here
+        0.6-3.6% off. ``marginal_error_`` holds the achieved max relative
+        marginal error, and a warning is raised above 1e-4.
     perplexity_iters : int, optional
         Bisection steps for the per-row bandwidth search. Default 50
         (more than enough for float64 precision).
@@ -95,6 +112,34 @@ class EntropicRandersAffinity(LogAffinity):
         ``Affinity(X)`` callable (e.g. as ``affinity_in`` of a TorchDR
         ``AffinityMatcher``, which always calls ``affinity_in(X)`` with no
         extra kwargs).
+    sparsity : bool, optional
+        If True, each row keeps only its ``n_neighbors`` nearest points
+        under the directed cost ``d_F(x_i -> .)``; the bandwidth is
+        calibrated on those entries (same bisection as the dense path) and
+        the call returns ``(values (n, k), indices (n, k))``, TorchDR's
+        sparse-affinity format. Default False (dense (n, n) output, as
+        before). **Recommended with ``doubly_stochastic=False``**, where it
+        is exact up to the truncation. With ``doubly_stochastic=True`` the
+        Sinkhorn balancing runs on the kNN support PLUS its reverse edges (a
+        point may be nobody's nearest neighbour, and a column with no
+        entries cannot receive its 1/n of mass); rows then have different
+        lengths and are padded to the longest one with ~zero entries
+        pointing at the row itself. This is a LOCAL variant of balancing,
+        not an approximation of the dense one: the dense balanced plan can
+        send a row's mass entirely outside its neighbourhood (once its
+        neighbours' columns are full), which no local support represents --
+        on full pancreas the two differ by a median row TV of 8% at 5x
+        perplexity, and on a handful of rows completely, whatever k.
+    n_neighbors : int, optional
+        Neighbours kept per row when ``sparsity=True``. Default
+        ``min(n - 1, ceil(5 * perplexity))``: t-SNE's usual 3x loses up to a
+        quarter of a row's mass on heterogeneous data (full pancreas, 30-D
+        PCA; max row gap 23% at 3x vs 12% at 5x, mean 2.4% vs 0.5%).
+    backend : {None, "keops"}, optional
+        How the sparse path finds the neighbours: a dense (n, n) cost
+        (None, default) or a KeOps lazy cost with O(n) memory ("keops").
+        The returned affinity is identical either way. The dense path
+        (``sparsity=False``) only supports ``backend=None`` for now.
     """
 
     def __init__(
@@ -103,16 +148,28 @@ class EntropicRandersAffinity(LogAffinity):
         drift_mode: DriftMode = "averaged",
         max_omega_norm: float = 0.95,
         doubly_stochastic: bool = True,
-        sinkhorn_iters: int = 200,
+        sinkhorn_iters: int = 5000,
         sinkhorn_tol: float = 1e-9,
         perplexity_iters: int = 50,
         omega: Optional[torch.Tensor] = None,
+        sparsity: bool = False,
+        n_neighbors: Optional[int] = None,
         metric: str = "sqeuclidean",
         device: str = "auto",
+        backend: Optional[str] = None,
         verbose: bool = False,
         compile: bool = False,
         _pre_processed: bool = False,
     ):
+        if backend not in (None, "keops"):
+            raise ValueError(
+                f"[EntropicRandersAffinity] backend must be None or 'keops', got {backend!r}."
+            )
+        if backend == "keops" and not sparsity:
+            raise NotImplementedError(
+                "[EntropicRandersAffinity] backend='keops' currently requires "
+                "sparsity=True (a lazy dense affinity is not implemented yet)."
+            )
         if metric != "sqeuclidean":
             raise NotImplementedError(
                 "[EntropicRandersAffinity] only metric='sqeuclidean' is "
@@ -120,7 +177,7 @@ class EntropicRandersAffinity(LogAffinity):
                 "coordinates)."
             )
         super().__init__(
-            metric=metric, zero_diag=False, device=device, backend=None,
+            metric=metric, zero_diag=False, device=device, backend=backend,
             verbose=verbose, compile=compile, _pre_processed=_pre_processed,
         )
         if not 0.0 < max_omega_norm < 1.0:
@@ -136,6 +193,8 @@ class EntropicRandersAffinity(LogAffinity):
         self.sinkhorn_tol = sinkhorn_tol
         self.perplexity_iters = perplexity_iters
         self._omega_default = omega
+        self.sparsity = sparsity
+        self.n_neighbors = n_neighbors
 
     def _calibrate_bandwidth(self, C: torch.Tensor, target_perplexity: float) -> torch.Tensor:
         """Per-row bisection for tau such that softmax(-C/tau) has the
@@ -148,33 +207,64 @@ class EntropicRandersAffinity(LogAffinity):
         hi = torch.full((n, 1), 1e6, dtype=C.dtype, device=C.device)
         for _ in range(self.perplexity_iters):
             tau = 0.5 * (lo + hi)
-            p = torch.softmax(-c_shifted / tau, dim=1)
-            H = -(p * p.clamp_min(1e-300).log()).sum(dim=1, keepdim=True)
+            log_p = torch.log_softmax(-c_shifted / tau, dim=1)
+            p = log_p.exp()
+            H = -torch.where(p > 0, p * log_p, 0.0).sum(dim=1, keepdim=True)
             too_low = H.exp() < target_perplexity
             lo = torch.where(too_low, tau, lo)
             hi = torch.where(too_low, hi, tau)
         return (0.5 * (lo + hi)).squeeze(1)
 
-    def _sinkhorn(self, K: torch.Tensor) -> torch.Tensor:
-        n = K.shape[0]
-        a = torch.full((n,), 1.0 / n, dtype=K.dtype, device=K.device)
-        u = torch.ones(n, dtype=K.dtype, device=K.device)
-        v = torch.ones(n, dtype=K.dtype, device=K.device)
-        for _ in range(self.sinkhorn_iters):
-            u_new = a / (K @ v).clamp_min(1e-300)
-            v_new = a / (K.T @ u_new).clamp_min(1e-300)
-            if (u_new - u).abs().max() < self.sinkhorn_tol:
-                u, v = u_new, v_new
-                break
-            u, v = u_new, v_new
-        return (u.unsqueeze(1) * K) * v.unsqueeze(0)
+    def _check_marginals(self, row_sums: torch.Tensor, col_sums: torch.Tensor, n: int):
+        err = max((row_sums * n - 1).abs().max().item(), (col_sums * n - 1).abs().max().item())
+        self.marginal_error_ = err
+        if not err <= 1e-4:
+            warnings.warn(
+                f"[EntropicRandersAffinity] Sinkhorn did not reach the "
+                f"marginals (max relative error {err:.2e} after "
+                f"{self.sinkhorn_iters} iterations); increase sinkhorn_iters"
+                f"{' or n_neighbors' if self.sparsity else ''}.", stacklevel=4)
 
-    def _compute_log_affinity(self, X: torch.Tensor, omega: Optional[torch.Tensor] = None):
-        n = self._get_n_samples(X)
+    def _sinkhorn_log(self, log_K: torch.Tensor) -> torch.Tensor:
+        """Dense log-domain Sinkhorn to uniform marginals 1/n (``log_K`` has
+        -inf where the kernel is zero, e.g. the diagonal). Returns log P."""
+        n = log_K.shape[0]
+        log_a = -math.log(n)
+        f = log_K.new_zeros(n)
+        g = log_K.new_zeros(n)
+        for _ in range(self.sinkhorn_iters):
+            f_new = log_a - torch.logsumexp(log_K + g[None, :], dim=1)
+            g = log_a - torch.logsumexp(log_K + f_new[:, None], dim=0)
+            done = (f_new - f).abs().max() < self.sinkhorn_tol
+            f = f_new
+            if done:
+                break
+        log_P = log_K + f[:, None] + g[None, :]
+        P = log_P.exp()
+        self._check_marginals(P.sum(1), P.sum(0), n)
+        return log_P
+
+    def __call__(self, X, log: bool = False, return_indices: Optional[bool] = None,
+                 **kwargs):
+        """Dense mode (default): the (n, n) affinity, as before (or
+        ``(affinity, None)`` if ``return_indices=True``). Sparse mode:
+        ``(values (n, k), indices (n, k))`` (just ``values`` if
+        ``return_indices=False``)."""
+        if not self.sparsity:
+            out = super().__call__(X, log=log, **kwargs)
+            return (out, None) if return_indices else out
+        if not self._pre_processed:
+            X = to_torch(X)
+        log_P, indices = self._compute_sparse_log_affinity(X, **kwargs)
+        values = log_P if log else log_P.exp()
+        return values if return_indices is False else (values, indices)
+
+    def _prepare(self, X: torch.Tensor, omega: Optional[torch.Tensor]):
+        """Move X to the compute device/dtype and return it with the
+        admissible, sign-flipped drift used in the cost."""
         device = self._get_compute_device(X)
         dtype = self._get_dtype(X)
         X = X.to(device=device, dtype=dtype)
-
         if omega is None:
             omega = self._omega_default
         if omega is None:
@@ -190,24 +280,93 @@ class EntropicRandersAffinity(LogAffinity):
         # (favoured), but d_F(x->y) = ||y-x|| + omega(x)^T(y-x) makes moving
         # ALIGNED with omega more expensive, not less -- so the admissible
         # field actually used in the cost is -omega, not omega.
-        omega_scaled = rescale_admissible(-omega, self.max_omega_norm)
+        return X, rescale_admissible(-omega, self.max_omega_norm)
+
+    def _target_perplexity(self, n: int) -> float:
+        return math.sqrt(n) if self.perplexity == "auto" else float(self.perplexity)
+
+    def _compute_sparse_log_affinity(self, X: torch.Tensor,
+                                     omega: Optional[torch.Tensor] = None):
+        """Row-stochastic affinity restricted to each row's k nearest points
+        under d_F(x_i -> .); returns (log P (n, k), indices (n, k)), with
+        the same overall scale as the dense path (entries sum to 1)."""
+        n = self._get_n_samples(X)
+        X, omega_scaled = self._prepare(X, omega)
+        target_perp = self._target_perplexity(n)
+        k = self.n_neighbors or min(n - 1, math.ceil(5 * target_perp))
+        if not target_perp < k:
+            raise ValueError(
+                f"[EntropicRandersAffinity] perplexity {target_perp:.1f} must be "
+                f"smaller than n_neighbors={k}."
+            )
+        d, indices = randers_knn(X, omega_scaled, k, mode=self.drift_mode,
+                                 backend=self.backend)
+        C = d ** 2
+        tau = self._calibrate_bandwidth(C, target_perp)
+        c_min = C.min(dim=1).values
+        if not self.doubly_stochastic:
+            log_K = -(C - c_min[:, None]) / tau.unsqueeze(1)
+            log_P = log_K - torch.logsumexp(log_K, dim=1, keepdim=True) - math.log(n)
+            return log_P.clamp_min(math.log(1e-300)), indices
+
+        # Balanced: kNN support + reverse edges (symmetric support, every
+        # point has >= k entries in its row and in its column).
+        rows_k = torch.arange(n, device=X.device).repeat_interleave(k)
+        cols_k = indices.reshape(-1)
+        keys = torch.unique(torch.cat([rows_k * n + cols_k, cols_k * n + rows_k]))  # row-major
+        rows, cols = keys // n, keys % n
+        C_e = randers_distance_pairs(X, omega_scaled, rows, cols, mode=self.drift_mode) ** 2
+        log_k = -(C_e - c_min[rows]) / tau[rows]
+        log_p = self._sparse_sinkhorn(rows, cols, log_k, n)
+
+        counts = torch.bincount(rows, minlength=n)
+        width = int(counts.max())
+        pos = torch.arange(rows.shape[0], device=X.device) - (counts.cumsum(0) - counts)[rows]
+        log_P = log_p.new_full((n, width), math.log(1e-300))
+        log_P[rows, pos] = log_p.clamp_min(math.log(1e-300))
+        idx = torch.arange(n, device=X.device)[:, None].repeat(1, width)
+        idx[rows, pos] = cols
+        return log_P, idx
+
+    def _sparse_sinkhorn(self, rows: torch.Tensor, cols: torch.Tensor, log_k: torch.Tensor,
+                         n: int) -> torch.Tensor:
+        """Log-domain Sinkhorn on an edge list, to uniform marginals 1/n.
+        Returns log P on the edges; warns if the marginals are not met."""
+        log_a = -math.log(n)
+        f = log_k.new_zeros(n)
+        g = log_k.new_zeros(n)
+        for _ in range(self.sinkhorn_iters):
+            f_new = log_a - _segment_logsumexp(log_k + g[cols], rows, n)
+            g = log_a - _segment_logsumexp(log_k + f_new[rows], cols, n)
+            done = (f_new - f).abs().max() < self.sinkhorn_tol
+            f = f_new
+            if done:
+                break
+        log_p = log_k + f[rows] + g[cols]
+        p = log_p.exp()
+        self._check_marginals(p.new_zeros(n).scatter_add(0, rows, p),
+                              p.new_zeros(n).scatter_add(0, cols, p), n)
+        return log_p
+
+    def _compute_log_affinity(self, X: torch.Tensor, omega: Optional[torch.Tensor] = None):
+        n = self._get_n_samples(X)
+        X, omega_scaled = self._prepare(X, omega)
+        device = X.device
 
         C = randers_distance(X, omega_scaled, mode=self.drift_mode) ** 2
         diag_mask = torch.eye(n, dtype=torch.bool, device=device)
         C = C.masked_fill(diag_mask, float("inf"))
 
-        target_perp = math.sqrt(n) if self.perplexity == "auto" else float(self.perplexity)
-        tau = self._calibrate_bandwidth(C, target_perp)
+        tau = self._calibrate_bandwidth(C, self._target_perplexity(n))
         c_min = C.min(dim=1, keepdim=True).values
-        K = torch.exp(-(C - c_min) / tau.unsqueeze(1))
-        K = K.masked_fill(diag_mask, 0.0)
+        log_K = (-(C - c_min) / tau.unsqueeze(1)).masked_fill(diag_mask, -math.inf)
 
         if self.doubly_stochastic:
-            P = self._sinkhorn(K)
+            log_P = self._sinkhorn_log(log_K)
         else:
-            P = (K / K.sum(dim=1, keepdim=True).clamp_min(1e-300)) / n
+            log_P = log_K - torch.logsumexp(log_K, dim=1, keepdim=True) - math.log(n)
 
-        return P.clamp_min(1e-300).log()
+        return log_P.clamp_min(math.log(1e-300))
 
 
 # ===========================================================================

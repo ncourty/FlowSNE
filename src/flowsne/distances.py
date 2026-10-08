@@ -103,6 +103,127 @@ def randers_distance(
     return (norm + drift_term(Z, omega_field, mode=mode)).clamp_min(0.0)
 
 
+def randers_distance_lazy(
+    Z: torch.Tensor,
+    omega_field: torch.Tensor,
+    mode: DriftMode = "averaged",
+    eps: float = 1e-24,
+):
+    """``randers_distance`` as a symbolic KeOps LazyTensor of shape (n, n):
+    the same formula, evaluated on the fly inside reductions, O(n) memory.
+    The diagonal is NOT excluded here (callers add their own mask)."""
+    from pykeops.torch import LazyTensor
+
+    z_i, z_j = LazyTensor(Z[:, None, :]), LazyTensor(Z[None, :, :])
+    w_i = LazyTensor(omega_field[:, None, :])
+    dz = z_j - z_i
+    norm = (dz.sqnorm2() + eps).sqrt()
+    if mode == "frozen":
+        drift = (w_i | dz)
+    elif mode == "averaged":
+        w_j = LazyTensor(omega_field[None, :, :])
+        drift = 0.5 * ((w_i + w_j) | dz)
+    else:
+        raise ValueError(f"mode must be 'frozen' or 'averaged', got {mode!r}")
+    return (norm + drift).relu()
+
+
+def randers_distance_indexed(
+    Z: torch.Tensor,
+    omega_field: torch.Tensor,
+    indices: torch.Tensor,
+    mode: DriftMode = "averaged",
+    eps: float = 1e-24,
+    chunk_elems: int = 2 ** 25,
+) -> torch.Tensor:
+    """``d_F(z_i -> z_{indices[i, m]})`` for a (n, k) index array, shape (n, k).
+    Differentiable, and processed in row chunks so the (rows, k, d) gather
+    never exceeds ``chunk_elems`` entries."""
+    n, k = indices.shape
+    d = Z.shape[1]
+    rows = max(1, chunk_elems // max(1, k * d))
+    out = []
+    for s in range(0, n, rows):
+        idx = indices[s:s + rows]
+        dz = Z[idx] - Z[s:s + rows, None, :]                       # (r, k, d)
+        norm = torch.sqrt((dz ** 2).sum(-1) + eps)
+        if mode == "frozen":
+            w = omega_field[s:s + rows, None, :]
+        elif mode == "averaged":
+            w = 0.5 * (omega_field[s:s + rows, None, :] + omega_field[idx])
+        else:
+            raise ValueError(f"mode must be 'frozen' or 'averaged', got {mode!r}")
+        out.append((norm + (w * dz).sum(-1)).clamp_min(0.0))
+    return torch.cat(out, dim=0)
+
+
+def randers_distance_pairs(
+    Z: torch.Tensor,
+    omega_field: torch.Tensor,
+    rows: torch.Tensor,
+    cols: torch.Tensor,
+    mode: DriftMode = "averaged",
+    eps: float = 1e-24,
+    chunk_elems: int = 2 ** 25,
+) -> torch.Tensor:
+    """``d_F(z_rows[e] -> z_cols[e])`` for an edge list, shape (E,).
+    Differentiable, processed in chunks of at most ``chunk_elems`` gathered
+    entries."""
+    d = Z.shape[1]
+    step = max(1, chunk_elems // max(1, d))
+    out = []
+    for s in range(0, rows.shape[0], step):
+        r, c = rows[s:s + step], cols[s:s + step]
+        dz = Z[c] - Z[r]
+        norm = torch.sqrt((dz ** 2).sum(-1) + eps)
+        if mode == "frozen":
+            w = omega_field[r]
+        elif mode == "averaged":
+            w = 0.5 * (omega_field[r] + omega_field[c])
+        else:
+            raise ValueError(f"mode must be 'frozen' or 'averaged', got {mode!r}")
+        out.append((norm + (w * dz).sum(-1)).clamp_min(0.0))
+    return torch.cat(out) if out else Z.new_zeros(0)
+
+
+def randers_knn(
+    Z: torch.Tensor,
+    omega_field: torch.Tensor,
+    k: int,
+    mode: DriftMode = "averaged",
+    backend: str | None = None,
+):
+    """Each row's ``k`` nearest points under the DIRECTED cost ``d_F(z_i -> .)``,
+    self excluded. Returns ``(d (n, k), indices (n, k))``, ``d`` increasing
+    along each row.
+
+    ``backend=None``: dense (n, n) cost then ``topk`` (O(n^2) memory).
+    ``backend="keops"``: lazy cost and ``argKmin`` (O(n) memory). Either way
+    the returned distances are recomputed from the indices with
+    ``randers_distance_indexed``, so they are exact, differentiable and
+    identical across backends."""
+    n = Z.shape[0]
+    if not 0 < k < n:
+        raise ValueError(f"k must be in [1, n-1] = [1, {n - 1}], got {k}.")
+    if backend is None:
+        with torch.no_grad():
+            D = randers_distance(Z.detach(), omega_field.detach(), mode=mode)
+            D = D.masked_fill(torch.eye(n, dtype=torch.bool, device=Z.device), float("inf"))
+            indices = D.topk(k, dim=1, largest=False).indices
+    elif backend == "keops":
+        from torchdr.utils import identity_matrix
+
+        with torch.no_grad():
+            D = randers_distance_lazy(Z.detach(), omega_field.detach(), mode=mode)
+            D = D + identity_matrix(n, keops=True, device=Z.device, dtype=Z.dtype) * 1e12
+            indices = D.argKmin(k, dim=1).long()
+    else:
+        raise ValueError(f"backend must be None or 'keops', got {backend!r}")
+    d = randers_distance_indexed(Z, omega_field, indices, mode=mode)
+    order = d.detach().argsort(dim=1)                 # argKmin order is not guaranteed
+    return d.gather(1, order), indices.gather(1, order)
+
+
 def bounded_direction(raw: torch.Tensor, max_norm: float, dim: int = -1) -> torch.Tensor:
     """Reparametrise an unconstrained tensor into the open ball of radius
     ``max_norm``: ``max_norm * r / (1 + ||r||)`` -- smooth and singularity

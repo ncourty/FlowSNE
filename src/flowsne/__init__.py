@@ -1,5 +1,8 @@
 from .distances import (
     randers_distance,
+    randers_distance_lazy,
+    randers_distance_indexed,
+    randers_knn,
     drift_term,
     pairwise_delta,
     bounded_direction,
@@ -18,6 +21,9 @@ from .embedding import JointAffinityMatcher, fit_drift_only
 
 __all__ = [
     "randers_distance",
+    "randers_distance_lazy",
+    "randers_distance_indexed",
+    "randers_knn",
     "drift_term",
     "pairwise_delta",
     "bounded_direction",

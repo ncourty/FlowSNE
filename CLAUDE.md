@@ -77,7 +77,7 @@ architecture is just an `nn.Module` you pass in — a global drift is
 class handles admissibility (`||omega|| < 1`) and the sign convention
 itself, so a custom flow only needs to output a raw, unconstrained vector.
 
-## Two things worth knowing before touching either affinity class
+## Things worth knowing before touching either affinity class
 
 1. **Sign convention**: under `d_F(z_i->z_j) = ||dz|| + omega(z_i)^T dz`,
    moving *with* `omega` makes the distance *larger*, not smaller — the
@@ -97,6 +97,24 @@ itself, so a custom flow only needs to output a raw, unconstrained vector.
    the symmetric baseline's own loss before committing to a full run on a
    new dataset, and fall back to `fit_drift_only` if the probe looks
    worse — don't assume either strategy transfers to a new domain.
+3. **Sinkhorn needs thousands of iterations here.** A tight perplexity
+   bandwidth makes the balanced kernel badly conditioned: the old default of
+   200 iterations left every single-cell dataset's marginals 0.6–3.6% off
+   (results before Oct 2026 that used `doubly_stochastic=True` on real data
+   were not truly balanced). Sinkhorn is now log-domain (float32-safe),
+   defaults to 5000 iterations with early stopping, stores
+   `marginal_error_` and warns above 1e-4. Full pancreas (3696 cells) takes
+   ~130 s on CPU; ε-scaling would speed this up.
+4. **Backends and sparsity** (`EntropicRandersAffinity(sparsity=True,
+   backend=None|"keops")`). Sparse mode keeps each row's `n_neighbors`
+   (default 5× perplexity) nearest points under the *directed* cost and
+   returns TorchDR's `(values, indices)` format; KeOps only changes how
+   neighbours are found (O(n) memory), the result is bitwise identical.
+   Row-stochastic sparse is exact up to truncation and is the recommended
+   sparse mode. Balanced sparse runs Sinkhorn on kNN + reverse edges and is a
+   *local* variant of balancing, not an approximation of the dense one (on
+   full pancreas: median row TV 8%, a few rows completely different, for
+   any k). The output kernel and loss do not have a KeOps path yet.
 
 ## Layout
 
@@ -112,7 +130,10 @@ itself, so a custom flow only needs to output a raw, unconstrained vector.
   here uses only `flowsne`'s public API — no heat-kernel code paths, no
   exploratory narration; see `FinslerAffinity/CLAUDE.md` for the full
   history of what was tried and why each domain's current setup won out.
-- `article/` — empty for now.
+- `tests/` — `test_backends.py`: dense vs KeOps equivalence, sparse
+  affinities, log-domain Sinkhorn vs the previous implementation, float32.
+  Run with `conda run -n dev python -m pytest tests/ -q`.
+- `article/draft/` — working status document (`draft.md`) and its figures.
 
 ## Conventions (carried over from `FinslerAffinity` / `FinslerOT`)
 
