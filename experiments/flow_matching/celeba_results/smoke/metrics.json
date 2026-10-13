@@ -1,0 +1,35 @@
+{
+ "args": {
+  "cmd": "all",
+  "tag": "smoke",
+  "n_per_t": 16,
+  "times": 5,
+  "steps": 20,
+  "batch": 64,
+  "n_pcs": 50,
+  "perplexity": "auto",
+  "fit_iters": 200,
+  "lr": 0.03,
+  "thumbnails": 30,
+  "seed": 0
+ },
+ "n": 80,
+ "n_pcs": 50,
+ "pca_explained": 0.9139487743377686,
+ "velocity_norm_kept": 0.7102986719300439,
+ "input_ftb_randers": 0.38959673480849233,
+ "input_ftb_symmetric": 0.3390502739076037,
+ "input_ftb_win_rate": 0.8999999761581421,
+ "symmetric_loss": 7.993843255077582,
+ "symmetric_secs": 0.2,
+ "flowsne_loss": 7.53230851685195,
+ "flowsne_secs": 0.2,
+ "flow_vs_time_gradient": 0.6388562433561827,
+ "flow_vs_time_gradient_by_t": {
+  "0.00": 0.9833779727487921,
+  "0.25": 0.9475300627950931,
+  "0.50": 0.9460798961205459,
+  "0.75": 0.21011387330021564,
+  "1.00": 0.10717941181626689
+ }
+}
