@@ -366,3 +366,31 @@ def test_dense_P_with_keops_raises():
     _, _, _, P_d, Z = _problem()
     with pytest.raises(NotImplementedError):
         _out("keops").cross_entropy(Z, P_d)
+
+
+# --- shared drift scale, warm starts (MNIST dynamics) -----------------------
+
+def test_omega_scale_fixed_and_checked():
+    X, V = _sphere(n=200)
+    aff = EntropicRandersAffinity(omega=V, doubly_stochastic=False, omega_scale=0.5)
+    _, W = aff._prepare(X, None)
+    torch.testing.assert_close(W, -0.5 * V)                    # not renormalised to 0.95
+    P_half = aff(X)
+    P_auto = EntropicRandersAffinity(omega=0.5 * V / V.norm(dim=1).max() * 0.95 / 0.5,
+                                     doubly_stochastic=False)(X)
+    assert not torch.allclose(P_half, P_auto)                  # a different, fixed scale
+    with pytest.raises(ValueError):
+        EntropicRandersAffinity(omega=V, doubly_stochastic=False, omega_scale=2.0)(X)
+
+
+def test_fit_embedding_warm_start_and_anchor():
+    X, P_s, idx, _, _ = _problem()
+    init = X[:, :2] * 7.0                                       # deliberately not unit-scaled
+    aff = _out(seed=5)
+    Z0 = fit_embedding(aff, P_s, init, indices=idx, max_iter=0, rescale_init=False)
+    torch.testing.assert_close(Z0, init)                        # kept as is
+    Z_free = fit_embedding(_out(seed=5), P_s, init, indices=idx, max_iter=30, lr=0.05,
+                           rescale_init=False)
+    Z_anch = fit_embedding(_out(seed=5), P_s, init, indices=idx, max_iter=30, lr=0.05,
+                           rescale_init=False, anchor=init, anchor_weight=10.0)
+    assert (Z_anch - init).norm() < (Z_free - init).norm()     # the anchor holds it closer

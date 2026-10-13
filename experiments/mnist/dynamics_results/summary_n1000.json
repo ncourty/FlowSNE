@@ -1,0 +1,49 @@
+{
+ "minutes": 32.4,
+ "summary": {
+  "0.0": {
+   "stability": 0.059625192278028524,
+   "flow_vs_disp": 0.03541676731889274,
+   "grad_vs_disp_in": 0.07231265249050091,
+   "early_final_disp": 0.2842653041159216,
+   "early_class_target": 0.3337436768416196,
+   "early_outward_class_target": -0.3161661898242908,
+   "early_grad_vs_final_disp_in": 0.29871648449836596,
+   "final_fit_loss": 11.0759793981151,
+   "animation": "/Users/nico/code/FlowSNE/experiments/mnist/dynamics_results/n1000_lam0/dynamics.mp4"
+  },
+  "0.01": {
+   "stability": 0.04362971609461297,
+   "flow_vs_disp": 0.0667025861213151,
+   "grad_vs_disp_in": 0.07231265249050091,
+   "early_final_disp": 0.2958083316610537,
+   "early_class_target": 0.3462379616789257,
+   "early_outward_class_target": -0.32669788249155873,
+   "early_grad_vs_final_disp_in": 0.29871648449836596,
+   "final_fit_loss": 11.104518715929313,
+   "animation": "/Users/nico/code/FlowSNE/experiments/mnist/dynamics_results/n1000_lam0.01/dynamics.mp4"
+  },
+  "0.03": {
+   "stability": 0.031690721224816885,
+   "flow_vs_disp": 0.09572139741689167,
+   "grad_vs_disp_in": 0.07231265249050091,
+   "early_final_disp": 0.2985158218681505,
+   "early_class_target": 0.41794823279212634,
+   "early_outward_class_target": -0.38612457940304956,
+   "early_grad_vs_final_disp_in": 0.29871648449836596,
+   "final_fit_loss": 11.319720378233155,
+   "animation": "/Users/nico/code/FlowSNE/experiments/mnist/dynamics_results/n1000_lam0.03/dynamics.mp4"
+  },
+  "0.1": {
+   "stability": 0.020546209730616178,
+   "flow_vs_disp": 0.1066214421085026,
+   "grad_vs_disp_in": 0.07231265249050091,
+   "early_final_disp": 0.2398061743578988,
+   "early_class_target": 0.4617680769746162,
+   "early_outward_class_target": -0.4046428614339324,
+   "early_grad_vs_final_disp_in": 0.29871648449836596,
+   "final_fit_loss": 11.426988753035381,
+   "animation": "/Users/nico/code/FlowSNE/experiments/mnist/dynamics_results/n1000_lam0.1/dynamics.mp4"
+  }
+ }
+}

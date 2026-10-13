@@ -37,7 +37,8 @@ class JointAffinityMatcher(AffinityMatcher):
 
 def fit_embedding(affinity_out, P, init, indices=None, max_iter: int = 1500, lr: float = 0.1,
                   init_scaling: float = 1.0, seed: int = 0, train_embedding: bool = True,
-                  train_flow: bool = True):
+                  train_flow: bool = True, rescale_init: bool = True, anchor=None,
+                  anchor_weight: float = 0.0):
     """Fit an embedding (and/or ``affinity_out``'s flow) by Adam on
     ``affinity_out.cross_entropy(Z, P, indices)`` -- dense ``P`` (n, n) or
     sparse ``P`` (n, k) + ``indices`` (``EntropicRandersAffinity(sparsity=
@@ -53,11 +54,19 @@ def fit_embedding(affinity_out, P, init, indices=None, max_iter: int = 1500, lr:
     ``train_embedding=False`` keeps ``init`` as the embedding (no rescaling)
     and fits the flow only (``fit_drift_only``); ``train_flow=False`` with a
     zero-initialised flow gives the symmetric Student baseline.
+
+    Warm starts (e.g. a sequence of snapshots): ``rescale_init=False`` keeps
+    ``init`` as is, and ``anchor`` (n, d) adds dynamic t-SNE's temporal
+    coherence term ``anchor_weight * mean_i ||z_i - anchor_i||^2`` (Rauber et
+    al. 2016) to the loss. The flow is warm-started simply by passing the
+    same ``affinity_out`` again.
     """
     torch.manual_seed(seed)
     Z = torch.as_tensor(init).to(dtype=P.dtype, device=P.device).detach().clone()
-    if train_embedding:
+    if train_embedding and rescale_init:
         Z = init_scaling * Z / Z[:, 0].std()
+    if anchor is not None:
+        anchor = torch.as_tensor(anchor).to(dtype=P.dtype, device=P.device).detach()
     Z.requires_grad_(train_embedding)
     groups = []
     if train_embedding:
@@ -71,7 +80,10 @@ def fit_embedding(affinity_out, P, init, indices=None, max_iter: int = 1500, lr:
     opt = torch.optim.Adam(groups, lr=lr)
     for _ in range(max_iter):
         opt.zero_grad(set_to_none=True)
-        affinity_out.cross_entropy(Z, P, indices).backward()
+        loss = affinity_out.cross_entropy(Z, P, indices)
+        if anchor is not None and anchor_weight:
+            loss = loss + anchor_weight * ((Z - anchor) ** 2).sum(-1).mean()
+        loss.backward()
         opt.step()
     return Z.detach()
 

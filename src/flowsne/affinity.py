@@ -93,6 +93,12 @@ class EntropicRandersAffinity(LogAffinity):
         magnitude across points) so its largest norm equals this value,
         enforcing the Randers admissibility bound ``||omega|| < 1``.
         Default 0.95.
+    omega_scale : float, optional
+        Use ``omega_scale * omega`` as is instead of rescaling by this
+        call's own maximum -- for a sequence of affinities that must share
+        one scale (e.g. snapshots over time, where the drift's magnitude
+        changes and that change should stay visible). Every scaled norm
+        must then be below ``max_omega_norm`` (checked). Default None.
     doubly_stochastic : bool, optional
         Sinkhorn-balance to uniform marginals (default True) or leave as a
         plain row-stochastic softmax (False). See above.
@@ -154,6 +160,7 @@ class EntropicRandersAffinity(LogAffinity):
         omega: Optional[torch.Tensor] = None,
         sparsity: bool = False,
         n_neighbors: Optional[int] = None,
+        omega_scale: Optional[float] = None,
         metric: str = "sqeuclidean",
         device: str = "auto",
         backend: Optional[str] = None,
@@ -195,6 +202,7 @@ class EntropicRandersAffinity(LogAffinity):
         self._omega_default = omega
         self.sparsity = sparsity
         self.n_neighbors = n_neighbors
+        self.omega_scale = omega_scale
 
     def _calibrate_bandwidth(self, C: torch.Tensor, target_perplexity: float) -> torch.Tensor:
         """Per-row bisection for tau such that softmax(-C/tau) has the
@@ -280,7 +288,16 @@ class EntropicRandersAffinity(LogAffinity):
         # (favoured), but d_F(x->y) = ||y-x|| + omega(x)^T(y-x) makes moving
         # ALIGNED with omega more expensive, not less -- so the admissible
         # field actually used in the cost is -omega, not omega.
-        return X, rescale_admissible(-omega, self.max_omega_norm)
+        if self.omega_scale is None:
+            return X, rescale_admissible(-omega, self.max_omega_norm)
+        scaled = -self.omega_scale * omega
+        top = scaled.norm(dim=-1).max().item() if scaled.numel() else 0.0
+        if top > self.max_omega_norm:
+            raise ValueError(
+                f"[EntropicRandersAffinity] omega_scale * ||omega|| reaches {top:.3f} > "
+                f"max_omega_norm={self.max_omega_norm} (Randers admissibility)."
+            )
+        return X, scaled
 
     def _target_perplexity(self, n: int) -> float:
         return math.sqrt(n) if self.perplexity == "auto" else float(self.perplexity)

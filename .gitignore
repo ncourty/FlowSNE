@@ -13,3 +13,6 @@ article/figures/*.pdf
 # run from, not relative to the script itself -- catches a stray repo-root
 # copy if a script is ever run from the repo root instead of its own dir.
 /data/
+experiments/**/*.mp4
+experiments/**/*.gif
+experiments/**/frames.npz
