@@ -1,57 +1,63 @@
-"""Visualising a pretrained CelebA flow-matching model's velocity field with
-FlowSNE (GPU script; also runs on CPU/MPS at toy sizes for smoke tests).
+"""Visualising a pretrained CelebA generative model's flow with FlowSNE (GPU
+script; also runs on CPU/MPS at toy sizes for smoke tests).
 
-Model: the OT flow-matching UNet on CelebA 128x128 from PnP-Flow (Martin et
-al., ICLR 2025, github.com/annegnx/PnP-Flow), checked in their source rather
-than assumed:
-  * architecture: their ``pnpflow.models.UNet(input_channels=3,
-    input_height=128, ch=32, ch_mult=(1,2,4,8), num_res_blocks=6,
-    attn_resolutions=(16,8), resamp_with_conv=True)``, called ``model(x, t)``
-    with t of shape (B,);
-  * convention: x_t = t * x1 + (1 - t) * x0 with x0 ~ N(0, I) (noise) and x1
-    data, and the network predicts x1 - x0: t = 0 is NOISE, t = 1 is DATA,
-    and the velocity points towards data;
-  * pixels in [-1, 1] (CenterCrop 178 -> Resize 128 -> Normalize(0.5, 0.5));
-    displayed as (x + 1) / 2.
-Their repository has no licence file, so their model code is NOT copied here:
-``models.py`` is downloaded at run time from a pinned commit, and the
-checkpoint from their Google Drive link (via gdown), into data/celeba/.
+Model: ``google/ddpm-celebahq-256`` (DDPM UNet2DModel, 113.7M parameters,
+CelebA-HQ 256x256, Apache-2.0), the model the FinslerAffinity CelebA
+experiment used, sampled deterministically with DDIM (eta = 0). Conventions
+taken from the model's own files, not assumed (that project's lesson): the
+scheduler is loaded from its ``scheduler_config.json`` (linear betas
+1e-4..0.02, clip_sample true), so pixels live in [-1, 1] and are displayed as
+(x + 1) / 2.
 
-Pipeline (each stage saves before the next, and generation resumes per time):
-  generate  for each of --times evenly spaced t in [0, 1], --n-per-t fresh
-            noise samples integrated with Euler (--steps over [0, 1]) up to t;
-            stores x_t and v(x_t, t) per time (float16), plus a sample grid
-            and one trajectory strip to LOOK AT before trusting anything.
-  embed     PCA of all x_t (--n-pcs), velocities projected linearly into the
-            same basis (exact); sparse row-stochastic Randers input affinity
-            (KeOps on CUDA); FlowSNE (flow fitted jointly) and a symmetric
-            baseline (same input affinity, zero flow); diagnostics.
-  plot      embeddings coloured by t, with streamlines of the fitted field,
-            and a version with image thumbnails.
+Time and flow. With N DDIM steps, the sampler visits x_0 (pure noise), x_1,
+..., x_N (a face); time is s = k / N in [0, 1] (0 = noise, 1 = face). The
+drift is, by default (--drift step), the sampler's own motion
+    v(x_k) = (x_{k+1} - x_k) * N,
+i.e. the deterministic DDIM displacement per unit of s -- the flow the
+generator actually follows, read off diffusers' own scheduler step rather
+than re-derived from the noise schedule by hand. --drift x0 instead uses
+x0_hat(x_k) - x_k (the predicted clean image minus the current one), the
+FinslerAffinity experiment's definition.
+
+Sampling. By default every noise sample is integrated once and recorded at
+all snapshot times (shared trajectories: N model calls per sample).
+--independent instead draws fresh noise for each snapshot time, as the
+FinslerAffinity experiment did (no trajectory links between times), at about
+5x the cost. Images and velocities are stored downsampled by average pooling
+to --store-res (128 by default): pooling is linear, so the stored velocity is
+exactly the pooled image's velocity.
+
+Pipeline (each stage saves before the next; generation resumes per batch):
+  generate  trajectories, snapshots at --times points, sample grid and one
+            trajectory strip to LOOK AT before trusting anything.
+  embed     PCA of all snapshots (--n-pcs), velocities projected linearly into
+            the same basis (exact); sparse row-stochastic Randers input
+            affinity (KeOps on CUDA); FlowSNE (flow fitted jointly) and a
+            symmetric baseline (same input affinity, zero flow); diagnostics.
+  plot      embeddings coloured by s, streamlines of the fitted field, and a
+            version with image thumbnails.
   all       the three in order.
 
 Diagnostics: forward-time bias of the input affinity (affinity-weighted mean
-t of where a point sends mass, minus its own t; Randers vs symmetric), and
-the cosine between the fitted field and the local gradient of t in the
-embedding (does the flow point towards later t?).
+s of where a point sends mass, minus its own s; Randers vs symmetric), and
+the cosine between the fitted field and the local gradient of s in the
+embedding (does the flow point towards later s?).
 
-Run:  python experiments/flow_matching/celeba_flow.py all --n-per-t 1000 --times 11
-      python experiments/flow_matching/celeba_flow.py all --n-per-t 16 --times 5 --steps 20 \
-          --fit-iters 200 --tag smoke        # quick CPU/MPS check
-Writes: experiments/flow_matching/data/celeba/  (model code, checkpoint, samples)
-        experiments/flow_matching/celeba_results/<tag>/  (embedding, figures, metrics)
+Run:  python experiments/flow_matching/celeba_flow.py all --n-traj 1000 --times 11
+      python experiments/flow_matching/celeba_flow.py all --n-traj 8 --times 5 --steps 10 \
+          --batch 4 --fit-iters 200 --tag smoke      # quick CPU/MPS check
+Writes: experiments/flow_matching/data/celeba/samples_<tag>/  (snapshots, sanity images)
+        experiments/flow_matching/celeba_results/<tag>/      (embedding, figures, metrics)
 """
 
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import gc
 import json
-import math
 import os
 import sys
 import time
-import urllib.request
 
 import numpy as np
 import torch
@@ -60,11 +66,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "src"))
 
 DATA = os.path.join(HERE, "data", "celeba")
-PNPFLOW_COMMIT = "ee5b159e6edff4d585ebf36c9a5333ffa85e066c"
-PNPFLOW_MODELS = (f"https://raw.githubusercontent.com/annegnx/PnP-Flow/{PNPFLOW_COMMIT}/"
-                  "pnpflow/models.py")
-CKPT_DRIVE_ID = "1ZZ6S-PGRx-tOPkr4Gt3A6RN-PChabnD6"
-IMG = 128
+MODEL_ID = "google/ddpm-celebahq-256"
+IMG = 256
 
 
 def device_and_dtype():
@@ -75,36 +78,46 @@ def device_and_dtype():
     return torch.device("cpu"), torch.float32
 
 
+def empty_cache(device):
+    if device.type == "mps":
+        torch.mps.empty_cache()
+    elif device.type == "cuda":
+        torch.cuda.empty_cache()
+    gc.collect()
+
+
 # ===========================================================================
 # Model
 # ===========================================================================
 
-def load_model(device):
-    os.makedirs(DATA, exist_ok=True)
-    code = os.path.join(DATA, f"pnpflow_models_{PNPFLOW_COMMIT[:8]}.py")
-    if not os.path.exists(code):
-        print(f"downloading PnP-Flow model code (commit {PNPFLOW_COMMIT[:8]})", flush=True)
-        urllib.request.urlretrieve(PNPFLOW_MODELS, code)
-    spec = importlib.util.spec_from_file_location("pnpflow_models", code)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    ckpt = os.path.join(DATA, "pnpflow_celeba_ot_model_final.pt")
-    if not os.path.exists(ckpt):
-        import gdown
-        print("downloading PnP-Flow CelebA checkpoint", flush=True)
-        gdown.download(f"https://drive.google.com/uc?id={CKPT_DRIVE_ID}", ckpt, quiet=False)
-    model = mod.UNet(input_channels=3, input_height=IMG, ch=32, ch_mult=(1, 2, 4, 8),
-                     num_res_blocks=6, attn_resolutions=(16, 8), resamp_with_conv=True)
-    model.load_state_dict(torch.load(ckpt, map_location="cpu"))
-    model.to(device).eval()
+def load_model(device, steps):
+    from diffusers import DDIMScheduler, UNet2DModel
+    model = UNet2DModel.from_pretrained(MODEL_ID).to(device).eval()
+    scheduler = DDIMScheduler.from_pretrained(MODEL_ID)      # the model's own config
+    scheduler.set_timesteps(steps)
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"model: PnP-Flow OT UNet, {n_params / 1e6:.1f}M parameters, on {device}", flush=True)
-    return model
+    print(f"model: {MODEL_ID}, {n_params / 1e6:.1f}M parameters, on {device}; DDIM {steps} "
+          f"steps, clip_sample={scheduler.config.clip_sample}", flush=True)
+    return model, scheduler
 
 
 @torch.no_grad()
-def velocity(model, x, t):
-    return model(x, torch.full((x.shape[0],), float(t), device=x.device, dtype=x.dtype))
+def ddim_step(model, scheduler, x, k):
+    """One deterministic DDIM step from x_k (k = 0 is pure noise). Returns
+    (x_{k+1}, x0_hat(x_k))."""
+    ts = scheduler.timesteps[k]
+    eps = model(x, ts).sample
+    out = scheduler.step(eps, ts, x, eta=0.0)
+    return out.prev_sample, out.pred_original_sample
+
+
+def pool(x, res):
+    return x if res == x.shape[-1] else torch.nn.functional.adaptive_avg_pool2d(x, res)
+
+
+def snapshot_indices(times, steps):
+    """Snapshot k's in [0, steps - 1] (the velocity at k needs x_{k+1})."""
+    return np.unique(np.round(np.linspace(0, steps - 1, times)).astype(int))
 
 
 # ===========================================================================
@@ -114,66 +127,95 @@ def velocity(model, x, t):
 @torch.no_grad()
 def generate(args):
     device, dtype = device_and_dtype()
-    model = load_model(device)
+    model, scheduler = load_model(device, args.steps)
     out = os.path.join(DATA, f"samples_{args.tag}")
     os.makedirs(out, exist_ok=True)
-    times = np.linspace(0.0, 1.0, args.times)
-    for k, t in enumerate(times):
-        path = os.path.join(out, f"t{k:02d}.npz")
+    ks = snapshot_indices(args.times, args.steps)
+    json.dump(dict(model=MODEL_ID, steps=args.steps, snapshot_k=ks.tolist(),
+                   s=(ks / args.steps).tolist(), drift=args.drift, independent=args.independent,
+                   store_res=args.store_res), open(os.path.join(out, "info.json"), "w"), indent=1)
+
+    def record(x, k):
+        x_next, x0 = ddim_step(model, scheduler, x, k)
+        v = (x_next - x) * args.steps if args.drift == "step" else x0 - x
+        return x_next, pool(x, args.store_res).half().cpu(), pool(v, args.store_res).half().cpu()
+
+    t_start = time.time()
+    n_batches = (args.n_traj + args.batch - 1) // args.batch
+    for b in range(n_batches):
+        path = os.path.join(out, f"batch{b:04d}.npz")
         if os.path.exists(path):
-            print(f"  t={t:.2f}: exists, skipping", flush=True)
             continue
         t0 = time.time()
-        g = torch.Generator().manual_seed(1000 + k)               # fresh noise per time
-        n_steps = int(round(t * args.steps))
+        bs = min(args.batch, args.n_traj - b * args.batch)
         xs, vs = [], []
-        for s in range(0, args.n_per_t, args.batch):
-            b = min(args.batch, args.n_per_t - s)
-            x = torch.randn(b, 3, IMG, IMG, generator=g).to(device=device, dtype=dtype)
-            for i in range(n_steps):                               # Euler from 0 to t
-                x = x + (t / n_steps) * velocity(model, x, i * t / n_steps)
-            xs.append(x.half().cpu())
-            vs.append(velocity(model, x, t).half().cpu())
-        x, v = torch.cat(xs), torch.cat(vs)
-        np.savez(path, x=x.numpy(), v=v.numpy(), t=np.float32(t))
-        print(f"  t={t:.2f}: {args.n_per_t} samples, {n_steps} Euler steps, pixel range "
-              f"[{x.float().min():.2f}, {x.float().max():.2f}], mean |v| "
-              f"{v.float().flatten(1).norm(dim=1).mean():.1f}  ({time.time() - t0:.0f}s)",
-              flush=True)
-    sanity_images(model, args, device, dtype, out)
+        if not args.independent:              # one trajectory, recorded at every snapshot
+            g = torch.Generator().manual_seed(10_000 + b)
+            x = torch.randn(bs, 3, IMG, IMG, generator=g).to(device=device, dtype=dtype)
+            for k in range(args.steps):
+                if k in ks:
+                    x, xp, vp = record(x, k)
+                    xs.append(xp); vs.append(vp)
+                else:
+                    x, _ = ddim_step(model, scheduler, x, k)
+            final = x
+        else:                                 # fresh noise for every snapshot
+            for j, kk in enumerate(ks):
+                g = torch.Generator().manual_seed(10_000 + 1000 * b + j)
+                x = torch.randn(bs, 3, IMG, IMG, generator=g).to(device=device, dtype=dtype)
+                for k in range(kk):
+                    x, _ = ddim_step(model, scheduler, x, k)
+                x_next, xp, vp = record(x, kk)
+                xs.append(xp); vs.append(vp)
+                final = x_next
+        np.savez(path, x=torch.stack(xs).numpy(), v=torch.stack(vs).numpy(),
+                 s=(ks / args.steps).astype(np.float32))
+        if b == 0:
+            np.save(os.path.join(out, "final_batch0.npy"), final[:16].half().cpu().numpy())
+        empty_cache(device)
+        print(f"  batch {b + 1}/{n_batches}: {bs} trajectories, {time.time() - t0:.0f}s "
+              f"(total {time.time() - t_start:.0f}s); snapshot pixel range "
+              f"[{float(min(t.float().min() for t in xs)):.2f}, "
+              f"{float(max(t.float().max() for t in xs)):.2f}]", flush=True)
+    sanity_images(model, scheduler, args, device, dtype, out)
 
 
 @torch.no_grad()
-def sanity_images(model, args, device, dtype, out):
-    """A 4x4 grid of finished samples and one trajectory across t, to look at
-    BEFORE trusting the pipeline (the last CelebA attempt's bugs -- pixel range,
-    layout -- were only caught by looking)."""
+def sanity_images(model, scheduler, args, device, dtype, out):
+    """A grid of finished samples and one trajectory across s, to look at
+    BEFORE trusting the pipeline (the FinslerAffinity CelebA experiment's bugs
+    -- pixel range, layout -- were only caught by looking)."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    show = lambda x: ((x.float().clamp(-1, 1) + 1) / 2).permute(1, 2, 0).cpu().numpy()
-    last = np.load(os.path.join(out, f"t{args.times - 1:02d}.npz"))
-    x1 = torch.tensor(last["x"][:16])
-    fig, axes = plt.subplots(4, 4, figsize=(8, 8))
-    for ax, img in zip(axes.flat, x1):
-        ax.imshow(show(img)); ax.axis("off")
-    fig.suptitle(f"t = 1 samples ({args.steps} Euler steps)", fontsize=10)
-    fig.savefig(os.path.join(out, "samples_t1.png"), dpi=80, bbox_inches="tight")
+    show = lambda x: ((torch.as_tensor(x).float().clamp(-1, 1) + 1) / 2).permute(1, 2, 0).numpy()
+    final = np.load(os.path.join(out, "final_batch0.npy"))
+    m = min(16, len(final))
+    cols = min(4, m)
+    rows = (m + cols - 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(2 * cols, 2 * rows), squeeze=False)
+    for ax in axes.flat:
+        ax.axis("off")
+    for ax, img in zip(axes.flat, final[:m]):
+        ax.imshow(show(img))
+    fig.suptitle(f"finished samples (DDIM {args.steps} steps, {IMG}x{IMG})", fontsize=10)
+    fig.savefig(os.path.join(out, "samples_final.png"), dpi=80, bbox_inches="tight")
     plt.close(fig)
     g = torch.Generator().manual_seed(7)
     x = torch.randn(1, 3, IMG, IMG, generator=g).to(device=device, dtype=dtype)
-    snaps, n = [], args.steps
-    for i in range(n + 1):
-        if i % max(1, n // 8) == 0 or i == n:
-            snaps.append((i / n, x[0].clone()))
-        if i < n:
-            x = x + (1.0 / n) * velocity(model, x, i / n)
+    snaps = []
+    every = max(1, args.steps // 8)
+    for k in range(args.steps):
+        if k % every == 0:
+            snaps.append((k / args.steps, x[0].cpu()))
+        x, _ = ddim_step(model, scheduler, x, k)
+    snaps.append((1.0, x[0].cpu()))
     fig, axes = plt.subplots(1, len(snaps), figsize=(2 * len(snaps), 2.2))
-    for ax, (t, img) in zip(axes, snaps):
-        ax.imshow(show(img)); ax.set_title(f"t={t:.2f}", fontsize=8); ax.axis("off")
+    for ax, (s, img) in zip(axes, snaps):
+        ax.imshow(show(img)); ax.set_title(f"s={s:.2f}", fontsize=8); ax.axis("off")
     fig.savefig(os.path.join(out, "trajectory.png"), dpi=80, bbox_inches="tight")
     plt.close(fig)
-    print(f"  sanity images: {out}/samples_t1.png, trajectory.png  -- look at them", flush=True)
+    print(f"  sanity images: {out}/samples_final.png, trajectory.png  -- look at them", flush=True)
 
 
 # ===========================================================================
@@ -181,13 +223,21 @@ def sanity_images(model, args, device, dtype, out):
 # ===========================================================================
 
 def load_samples(tag):
+    """All snapshots: x, v (n, 3, R, R) float16, s (n,), trajectory id (n,)."""
     out = os.path.join(DATA, f"samples_{tag}")
-    files = sorted(f for f in os.listdir(out) if f.startswith("t") and f.endswith(".npz"))
-    xs, vs, ts = [], [], []
+    files = sorted(f for f in os.listdir(out) if f.startswith("batch") and f.endswith(".npz"))
+    xs, vs, ss, traj = [], [], [], []
+    offset = 0
     for f in files:
         d = np.load(os.path.join(out, f))
-        xs.append(d["x"]); vs.append(d["v"]); ts.append(np.full(len(d["x"]), float(d["t"])))
-    return np.concatenate(xs), np.concatenate(vs), np.concatenate(ts).astype(np.float32)
+        K, B = d["x"].shape[:2]
+        xs.append(d["x"].reshape(K * B, *d["x"].shape[2:]))
+        vs.append(d["v"].reshape(K * B, *d["v"].shape[2:]))
+        ss.append(np.repeat(d["s"], B))
+        traj.append(np.tile(np.arange(offset, offset + B), K))
+        offset += B
+    return (np.concatenate(xs), np.concatenate(vs), np.concatenate(ss).astype(np.float32),
+            np.concatenate(traj))
 
 
 def forward_time_bias(P, idx, t):
@@ -209,7 +259,7 @@ def embed(args):
     res = os.path.join(HERE, "celeba_results", args.tag)
     os.makedirs(res, exist_ok=True)
 
-    x, v, t_np = load_samples(args.tag)
+    x, v, t_np, _ = load_samples(args.tag)
     n = len(x)
     X = torch.tensor(x.reshape(n, -1), dtype=torch.float32, device=device)
     V = torch.tensor(v.reshape(n, -1), dtype=torch.float32, device=device)
@@ -342,15 +392,15 @@ def plot(args):
                           norm=Normalize(-0.15, 1.0, clip=True), linewidth=2.2 * rel, arrowsize=0.7)
         ax.set_xlim(lo[0], hi[0]); ax.set_ylim(lo[1], hi[1])
         ax.set_xticks([]); ax.set_yticks([]); ax.set_aspect("equal"); ax.set_title(title, fontsize=10)
-    fig.colorbar(sc, ax=axes, shrink=0.75, label="t  (0 = noise, 1 = face)")
-    fig.suptitle(f"CelebA flow matching (PnP-Flow OT model), n = {n}, input forward-time bias "
+    fig.colorbar(sc, ax=axes, shrink=0.75, label="s  (0 = noise, 1 = face)")
+    fig.suptitle(f"CelebA-HQ DDPM ({MODEL_ID}, DDIM flow), n = {n}, input forward-time bias "
                  f"Randers {M['input_ftb_randers']:+.3f} vs symmetric {M['input_ftb_symmetric']:+.3f}",
                  fontsize=11)
     fig.savefig(os.path.join(res, "embedding.png"), dpi=110, bbox_inches="tight")
     plt.close(fig)
 
     # thumbnails on the FlowSNE embedding
-    x, _, t_s = load_samples(args.tag)
+    x, _, _, _ = load_samples(args.tag)
     Z = E["Z_flowsne"]
     lo, hi = axes_of(Z)
     fig, ax = plt.subplots(figsize=(11, 11))
@@ -358,7 +408,8 @@ def plot(args):
     rng = np.random.default_rng(0)
     for i in rng.choice(n, size=min(n, args.thumbnails), replace=False):
         img = ((x[i].astype(np.float32).clip(-1, 1) + 1) / 2).transpose(1, 2, 0)
-        ax.add_artist(AnnotationBbox(OffsetImage(img, zoom=0.28), Z[i], frameon=False))
+        ax.add_artist(AnnotationBbox(OffsetImage(img, zoom=0.28 * 128 / img.shape[0]), Z[i],
+                                     frameon=False))
     ax.set_xlim(lo[0], hi[0]); ax.set_ylim(lo[1], hi[1])
     ax.set_xticks([]); ax.set_yticks([]); ax.set_aspect("equal")
     ax.set_title("FlowSNE embedding with sample thumbnails", fontsize=11)
@@ -371,10 +422,16 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["generate", "embed", "plot", "all"])
     ap.add_argument("--tag", default="main", help="names the sample/result directories")
-    ap.add_argument("--n-per-t", type=int, default=1000)
-    ap.add_argument("--times", type=int, default=11, help="evenly spaced t in [0, 1]")
-    ap.add_argument("--steps", type=int, default=100, help="Euler steps over [0, 1]")
-    ap.add_argument("--batch", type=int, default=64)
+    ap.add_argument("--n-traj", type=int, default=1000,
+                    help="trajectories (shared mode) or samples per snapshot (--independent)")
+    ap.add_argument("--times", type=int, default=11, help="snapshot times in [0, 1)")
+    ap.add_argument("--steps", type=int, default=50, help="DDIM steps")
+    ap.add_argument("--drift", choices=["step", "x0"], default="step",
+                    help="step: the DDIM displacement per unit time; x0: x0_hat - x")
+    ap.add_argument("--independent", action="store_true",
+                    help="fresh noise per snapshot time (no trajectory links), ~5x the cost")
+    ap.add_argument("--store-res", type=int, default=128, help="stored resolution (avg pooling)")
+    ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--n-pcs", type=int, default=50)
     ap.add_argument("--perplexity", default="auto")
     ap.add_argument("--fit-iters", type=int, default=3000)
