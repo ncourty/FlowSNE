@@ -1,6 +1,8 @@
 """Render the MNIST learning-dynamics frames (dynamics.py) with the fitted
-flow drawn as STREAMLINES of the continuous field, instead of arrows at the
-samples.
+flow drawn from the continuous field rather than as arrows at the samples:
+as STREAMLINES (--style streamlines), or as the field's DIVERGENCE (red =
+source, blue = sink) with the mean drift per grid cell on top (--style
+divergence, see flowsne.viz) -- the latter stays readable with many points.
 
 The field is FlowSNE's flow network itself, evaluated on a grid: frames.npz
 stores each frame's network weights. The network starts with InputStdNorm,
@@ -16,7 +18,7 @@ settles stays visible. Framing is
 identical to dynamics.py's arrow animation (fixed axes from all frames).
 
 Run:    conda run -n dev python experiments/mnist/animate_streamlines.py --dirs n1000_lam0 n1000_lam0.1
-Writes: <dir>/dynamics_streamlines.mp4 (or .gif), and a contact sheet
+Writes: <dir>/dynamics_<style>.mp4 (or .gif), and a contact sheet
         dynamics_results/streamlines_vs_arrows_n<n>.png comparing both styles.
 """
 
@@ -106,7 +108,25 @@ def draw(ax, S, M, t, lo, hi, vmax, style, colors, sub):
                  fontsize=9)
 
 
-def animate(run_dir, fps=6):
+def draw_divergence(ax, S, M, t, lo, hi, ref, dvmax, colors, bins, field):
+    """Divergence of the fitted field (red = source, blue = sink) behind the
+    points, mean drift per grid cell on top, with ONE arrow reference and ONE
+    divergence colour scale for the whole animation (see flowsne.viz)."""
+    from flowsne.viz import divergence_map, grid_arrows
+    Z = S["Z"][t].astype(float)
+    n = Z.shape[0]
+    size, alpha = (5, 0.6) if n <= 2000 else (max(0.3, 5000 / n), 0.4)
+    divergence_map(ax, field, Z, lo=lo, hi=hi, vmax=dvmax)
+    ax.scatter(Z[:, 0], Z[:, 1], c=colors, s=size, linewidths=0, alpha=alpha, zorder=1)
+    grid_arrows(ax, Z, S["F"][t].astype(float), bins=bins, lo=lo, hi=hi, ref=ref, zorder=3)
+    ax.set_xlim(lo[0], hi[0]); ax.set_ylim(lo[1], hi[1])
+    ax.set_xticks([]); ax.set_yticks([]); ax.set_aspect("equal")
+    m = M[t]
+    ax.set_title(f"iteration {m['step']}  acc {m['acc']:.2f}  |grad| {m['mean_grad_norm']:.1e}",
+                 fontsize=9)
+
+
+def animate(run_dir, fps=6, style="streamlines"):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -116,14 +136,32 @@ def animate(run_dir, fps=6):
     lo, hi = frame_axes(S["Z"])
     vmax = max(np.linalg.norm(S["F"], axis=2).max(), 1e-12)
     colors = np.array(matplotlib.colormaps["tab10"].colors)[S["labels"]]
+    T = S["Z"].shape[0]
+
+    if style == "divergence":
+        from flowsne.viz import default_bins, divergence_map, field_from_flow, grid_field
+        bins = default_bins(S["Z"].shape[1])
+        fields = [field_from_flow(S["flow_params"][t], S["z_std"][t], int(S["flow_hidden_dim"]))
+                  for t in range(T)]
+        ref = np.percentile(np.concatenate([
+            np.linalg.norm(grid_field(S["Z"][t].astype(float), S["F"][t].astype(float),
+                                      bins=bins, lo=lo, hi=hi)[1], axis=1) for t in range(T)]), 90)
+        probe = plt.figure()
+        dvmax = max(divergence_map(probe.add_subplot(), fields[t], S["Z"][t].astype(float),
+                                   lo=lo, hi=hi)[1] for t in range(T))
+        plt.close(probe)
+
     fig, ax = plt.subplots(figsize=(6.4, 6.4))
 
     def update(t):
         ax.clear()
-        draw(ax, S, M, t, lo, hi, vmax, "streamlines", colors, None)
+        if style == "divergence":
+            draw_divergence(ax, S, M, t, lo, hi, ref, dvmax, colors, bins, fields[t])
+        else:
+            draw(ax, S, M, t, lo, hi, vmax, "streamlines", colors, None)
 
-    anim = animation.FuncAnimation(fig, update, frames=S["Z"].shape[0], blit=False)
-    path = os.path.join(run_dir, "dynamics_streamlines.mp4")
+    anim = animation.FuncAnimation(fig, update, frames=T, blit=False)
+    path = os.path.join(run_dir, f"dynamics_{style}.mp4")
     if shutil.which("ffmpeg"):
         anim.save(path, writer=animation.FFMpegWriter(fps=fps, bitrate=2400), dpi=130)
     else:
@@ -163,9 +201,13 @@ if __name__ == "__main__":
     ap.add_argument("--dirs", nargs="+", default=["n1000_lam0", "n1000_lam0.1"],
                     help="run directories under dynamics_results/")
     ap.add_argument("--no-animation", action="store_true")
+    ap.add_argument("--style", choices=["streamlines", "divergence", "both"], default="both",
+                    help="animation style(s): streamlines, or divergence + grid arrows")
     a = ap.parse_args()
     dirs = [os.path.join(RESULTS, d) for d in a.dirs]
     print("contact sheet:", contact_sheet(dirs))
     if not a.no_animation:
+        styles = ["streamlines", "divergence"] if a.style == "both" else [a.style]
         for d in dirs:
-            print("animation:", animate(d))
+            for st in styles:
+                print("animation:", animate(d, style=st))

@@ -34,8 +34,9 @@ Pipeline (each stage saves before the next; generation resumes per batch):
             the same basis (exact); sparse row-stochastic Randers input
             affinity (KeOps on CUDA); FlowSNE (flow fitted jointly) and a
             symmetric baseline (same input affinity, zero flow); diagnostics.
-  plot      embeddings coloured by s, streamlines of the fitted field, and a
-            version with image thumbnails.
+  plot      embeddings coloured by s; on FlowSNE's, the divergence of the
+            fitted field (red = source, blue = sink) and the mean drift per
+            grid cell (flowsne.viz); and a version with image thumbnails.
   all       the three in order.
 
 Diagnostics: forward-time bias of the input affinity (affinity-weighted mean
@@ -345,11 +346,8 @@ def plot(args):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from matplotlib.colors import Normalize
     from matplotlib.offsetbox import AnnotationBbox, OffsetImage
-    from scipy.ndimage import maximum_filter
-    from flowsne.distances import bounded_direction
-    from flowsne.flows import input_std_norm_flow
+    from flowsne.viz import default_bins, divergence_map, field_from_flow, grid_arrows
 
     res = os.path.join(HERE, "celeba_results", args.tag)
     E = np.load(os.path.join(res, "embedding.npz"))
@@ -357,20 +355,6 @@ def plot(args):
     t = E["t"]
     n = len(t)
     size = 6 if n <= 2000 else max(0.3, 8000 / n)
-
-    def field_on_grid(Z, lo, hi, res_=70):
-        flow = input_std_norm_flow(2, hidden_dim=int(E["flow_hidden_dim"])).double()
-        torch.nn.utils.vector_to_parameters(torch.tensor(E["flow_params"]), flow.parameters())
-        xs, ys = np.linspace(lo[0], hi[0], res_), np.linspace(lo[1], hi[1], res_)
-        GX, GY = np.meshgrid(xs, ys)
-        G = torch.tensor(np.stack([GX.ravel(), GY.ravel()], 1))
-        with torch.no_grad():                              # InputStdNorm uses Z's std
-            Fg = -bounded_direction(flow[1](G / float(E["z_std"])), 0.95).numpy()
-        cnt, _, _ = np.histogram2d(Z[:, 1], Z[:, 0], bins=res_, range=[[lo[1], hi[1]], [lo[0], hi[0]]])
-        mask = ~(maximum_filter(cnt, size=5) > 0)
-        U = np.ma.array(Fg[:, 0].reshape(res_, res_), mask=mask)
-        V = np.ma.array(Fg[:, 1].reshape(res_, res_), mask=mask)
-        return xs, ys, U, V
 
     def axes_of(Z):
         lo, hi = np.percentile(Z, [0.5, 99.5], axis=0)
@@ -383,13 +367,15 @@ def plot(args):
                                                   f"time gradient {M['flow_vs_time_gradient']:+.2f})")):
         Z = E[key]
         lo, hi = axes_of(Z)
-        sc = ax.scatter(Z[:, 0], Z[:, 1], c=t, cmap="viridis", s=size, linewidths=0, alpha=0.8)
         if key == "Z_flowsne":
-            xs, ys, U, V = field_on_grid(Z, lo, hi)
-            sp = np.ma.array(np.hypot(U.data, V.data), mask=U.mask)
-            rel = (sp / max(sp.max(), 1e-12)).filled(0.0)
-            ax.streamplot(xs, ys, U, V, density=1.3, color=rel, cmap="Greys",
-                          norm=Normalize(-0.15, 1.0, clip=True), linewidth=2.2 * rel, arrowsize=0.7)
+            # divergence of the fitted field (red = source, blue = sink) behind
+            # the points, and the mean drift per grid cell on top
+            field = field_from_flow(E["flow_params"], E["z_std"], int(E["flow_hidden_dim"]))
+            divergence_map(ax, field, Z, lo=lo, hi=hi)
+        sc = ax.scatter(Z[:, 0], Z[:, 1], c=t, cmap="viridis", s=size, linewidths=0, alpha=0.7,
+                        zorder=1)
+        if key == "Z_flowsne":
+            grid_arrows(ax, Z, E["F_flowsne"], bins=default_bins(n), lo=lo, hi=hi, zorder=3)
         ax.set_xlim(lo[0], hi[0]); ax.set_ylim(lo[1], hi[1])
         ax.set_xticks([]); ax.set_yticks([]); ax.set_aspect("equal"); ax.set_title(title, fontsize=10)
     fig.colorbar(sc, ax=axes, shrink=0.75, label="s  (0 = noise, 1 = face)")

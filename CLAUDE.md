@@ -137,7 +137,15 @@ itself, so a custom flow only needs to output a raw, unconstrained vector.
   approximations + the admissibility reparametrisation), `flows.py`
   (pluggable drift-network architectures + three example builders),
   `affinity.py` (`EntropicRandersAffinity`, `RandersAffinity`),
-  `embedding.py` (`JointAffinityMatcher`, `fit_drift_only`).
+  `embedding.py` (`JointAffinityMatcher`, `fit_drift_only`, `fit_embedding`),
+  `viz.py` (drawing a fitted flow over a large embedding: the field's
+  divergence as background — red source, blue sink — with the mean drift
+  per grid cell on top, arrow length in units of |ω| with a legend; also
+  direction colouring. Streamlines get cluttered at thousands of points;
+  this is the preferred view. `field_from_flow` rebuilds a saved
+  `input_std_norm_flow` — evaluate it on points / std(Z), not raw points).
+  Known artefact: sharp ridges where the network switches between
+  neighbouring clusters, even where points are present.
 - `experiments/` — `toy/` (synthetic vortex + rotating-sphere), `single_cell/`
   (pancreas + dentate gyrus RNA velocity), `mnist/` (gradient-as-drift),
   `flow_matching/` (a pretrained flow-matching model's own velocity field),
