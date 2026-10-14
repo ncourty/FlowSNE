@@ -1,0 +1,39 @@
+{
+ "args": {
+  "cmd": "all",
+  "tag": "smoke_ind",
+  "n_traj": 8,
+  "times": 4,
+  "steps": 8,
+  "drift": "step",
+  "sampling": "independent",
+  "store_res": 128,
+  "batch": 4,
+  "n_pcs": 50,
+  "perplexity": "auto",
+  "fit_iters": 100,
+  "lr": 0.03,
+  "thumbnails": 10,
+  "point_size": 0,
+  "dpi": 200,
+  "seed": 0
+ },
+ "n": 32,
+ "n_pcs": 31,
+ "pca_explained": 1.0000051259994507,
+ "velocity_norm_kept": 0.5284313835680319,
+ "input_ftb_randers": 0.4336460067891924,
+ "input_ftb_symmetric": 0.43006578716575233,
+ "input_ftb_win_rate": 0.96875,
+ "symmetric_loss": 6.628655634526078,
+ "symmetric_secs": 0.1,
+ "flowsne_loss": 5.9315479648104255,
+ "flowsne_secs": 0.1,
+ "flow_vs_time_gradient": 0.73645369294952,
+ "flow_vs_time_gradient_by_t": {
+  "0.00": 0.9425576355982604,
+  "0.25": 0.8924077707957593,
+  "0.62": 0.5925024397662892,
+  "0.88": 0.5183469256377715
+ }
+}

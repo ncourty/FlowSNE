@@ -19,11 +19,12 @@ than re-derived from the noise schedule by hand. --drift x0 instead uses
 x0_hat(x_k) - x_k (the predicted clean image minus the current one), the
 FinslerAffinity experiment's definition.
 
-Sampling. By default every noise sample is integrated once and recorded at
-all snapshot times (shared trajectories: N model calls per sample).
---independent instead draws fresh noise for each snapshot time, as the
-FinslerAffinity experiment did (no trajectory links between times), at about
-5x the cost. Images and velocities are stored downsampled by average pooling
+Sampling. By default (--sampling independent) every snapshot time gets its
+own fresh noise, integrated up to that time, so points at different times
+are different realisations (as in the FinslerAffinity experiment), at about
+5-6x the model calls of --sampling shared, where each noise sample is
+integrated once and recorded at all snapshot times. A sample directory
+records its mode, and generation refuses to resume one in the other mode. Images and velocities are stored downsampled by average pooling
 to --store-res (128 by default): pooling is linear, so the stored velocity is
 exactly the pooled image's velocity.
 
@@ -47,6 +48,8 @@ embedding (does the flow point towards later s?).
 Run:  python experiments/flow_matching/celeba_flow.py all --n-traj 1000 --times 11
       python experiments/flow_matching/celeba_flow.py all --n-traj 8 --times 5 --steps 10 \
           --batch 4 --fit-iters 200 --tag smoke      # quick CPU/MPS check
+      python experiments/flow_matching/celeba_flow.py plot --tag main --point-size 6 --dpi 300
+                                                     # re-plot only (bigger dots, sharper)
 Writes: experiments/flow_matching/data/celeba/samples_<tag>/  (snapshots, sanity images)
         experiments/flow_matching/celeba_results/<tag>/      (embedding, figures, metrics)
 """
@@ -132,9 +135,18 @@ def generate(args):
     out = os.path.join(DATA, f"samples_{args.tag}")
     os.makedirs(out, exist_ok=True)
     ks = snapshot_indices(args.times, args.steps)
-    json.dump(dict(model=MODEL_ID, steps=args.steps, snapshot_k=ks.tolist(),
-                   s=(ks / args.steps).tolist(), drift=args.drift, independent=args.independent,
-                   store_res=args.store_res), open(os.path.join(out, "info.json"), "w"), indent=1)
+    info = dict(model=MODEL_ID, steps=args.steps, snapshot_k=ks.tolist(),
+                s=(ks / args.steps).tolist(), drift=args.drift, sampling=args.sampling,
+                store_res=args.store_res)
+    info_path = os.path.join(out, "info.json")
+    if os.path.exists(info_path):                  # resuming: settings must match
+        old = json.load(open(info_path))
+        old.setdefault("sampling", "independent" if old.get("independent") else "shared")
+        diff = {k: (old.get(k), v) for k, v in info.items() if old.get(k) != v}
+        if diff:
+            sys.exit(f"!! {out} was generated with different settings {diff} (old, new): "
+                     "use a new --tag (TAG=...) instead of mixing them")
+    json.dump(info, open(info_path, "w"), indent=1)
 
     def record(x, k):
         x_next, x0 = ddim_step(model, scheduler, x, k)
@@ -150,7 +162,7 @@ def generate(args):
         t0 = time.time()
         bs = min(args.batch, args.n_traj - b * args.batch)
         xs, vs = [], []
-        if not args.independent:              # one trajectory, recorded at every snapshot
+        if args.sampling == "shared":         # one trajectory, recorded at every snapshot
             g = torch.Generator().manual_seed(10_000 + b)
             x = torch.randn(bs, 3, IMG, IMG, generator=g).to(device=device, dtype=dtype)
             for k in range(args.steps):
@@ -174,7 +186,8 @@ def generate(args):
         if b == 0:
             np.save(os.path.join(out, "final_batch0.npy"), final[:16].half().cpu().numpy())
         empty_cache(device)
-        print(f"  batch {b + 1}/{n_batches}: {bs} trajectories, {time.time() - t0:.0f}s "
+        unit = "trajectories" if args.sampling == "shared" else "samples per snapshot time"
+        print(f"  batch {b + 1}/{n_batches}: {bs} {unit}, {time.time() - t0:.0f}s "
               f"(total {time.time() - t_start:.0f}s); snapshot pixel range "
               f"[{float(min(t.float().min() for t in xs)):.2f}, "
               f"{float(max(t.float().max() for t in xs)):.2f}]", flush=True)
@@ -354,14 +367,14 @@ def plot(args):
     M = json.load(open(os.path.join(res, "metrics.json")))
     t = E["t"]
     n = len(t)
-    size = 6 if n <= 2000 else max(0.3, 8000 / n)
+    size = args.point_size or float(np.clip(40000 / n, 2.0, 12.0))
 
     def axes_of(Z):
         lo, hi = np.percentile(Z, [0.5, 99.5], axis=0)
         pad = 0.06 * (hi - lo)
         return lo - pad, hi + pad
 
-    fig, axes = plt.subplots(1, 2, figsize=(13, 6.4))
+    fig, axes = plt.subplots(1, 2, figsize=(16, 7.8))
     for ax, key, title in ((axes[0], "Z_symmetric", f"symmetric  (loss {M['symmetric_loss']:.3f})"),
                            (axes[1], "Z_flowsne", f"FlowSNE  (loss {M['flowsne_loss']:.3f}; field vs "
                                                   f"time gradient {M['flow_vs_time_gradient']:+.2f})")):
@@ -382,7 +395,7 @@ def plot(args):
     fig.suptitle(f"CelebA-HQ DDPM ({MODEL_ID}, DDIM flow), n = {n}, input forward-time bias "
                  f"Randers {M['input_ftb_randers']:+.3f} vs symmetric {M['input_ftb_symmetric']:+.3f}",
                  fontsize=11)
-    fig.savefig(os.path.join(res, "embedding.png"), dpi=110, bbox_inches="tight")
+    fig.savefig(os.path.join(res, "embedding.png"), dpi=args.dpi, bbox_inches="tight")
     plt.close(fig)
 
     # thumbnails on the FlowSNE embedding
@@ -399,7 +412,7 @@ def plot(args):
     ax.set_xlim(lo[0], hi[0]); ax.set_ylim(lo[1], hi[1])
     ax.set_xticks([]); ax.set_yticks([]); ax.set_aspect("equal")
     ax.set_title("FlowSNE embedding with sample thumbnails", fontsize=11)
-    fig.savefig(os.path.join(res, "embedding_thumbnails.png"), dpi=110, bbox_inches="tight")
+    fig.savefig(os.path.join(res, "embedding_thumbnails.png"), dpi=args.dpi, bbox_inches="tight")
     plt.close(fig)
     print(f"figures: {res}/embedding.png, embedding_thumbnails.png", flush=True)
 
@@ -409,13 +422,14 @@ if __name__ == "__main__":
     ap.add_argument("cmd", choices=["generate", "embed", "plot", "all"])
     ap.add_argument("--tag", default="main", help="names the sample/result directories")
     ap.add_argument("--n-traj", type=int, default=1000,
-                    help="trajectories (shared mode) or samples per snapshot (--independent)")
+                    help="samples per snapshot time (independent) or trajectories (shared)")
     ap.add_argument("--times", type=int, default=11, help="snapshot times in [0, 1)")
     ap.add_argument("--steps", type=int, default=50, help="DDIM steps")
     ap.add_argument("--drift", choices=["step", "x0"], default="step",
                     help="step: the DDIM displacement per unit time; x0: x0_hat - x")
-    ap.add_argument("--independent", action="store_true",
-                    help="fresh noise per snapshot time (no trajectory links), ~5x the cost")
+    ap.add_argument("--sampling", choices=["independent", "shared"], default="independent",
+                    help="independent: fresh noise per snapshot time (different realisations); "
+                         "shared: one trajectory recorded at every time (~5-6x cheaper)")
     ap.add_argument("--store-res", type=int, default=128, help="stored resolution (avg pooling)")
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--n-pcs", type=int, default=50)
@@ -423,6 +437,9 @@ if __name__ == "__main__":
     ap.add_argument("--fit-iters", type=int, default=3000)
     ap.add_argument("--lr", type=float, default=0.03)
     ap.add_argument("--thumbnails", type=int, default=120)
+    ap.add_argument("--point-size", type=float, default=0,
+                    help="marker area in pt^2 (0 = auto: ~3.6 at 11k points)")
+    ap.add_argument("--dpi", type=int, default=200)
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
     if a.cmd in ("generate", "all"):
