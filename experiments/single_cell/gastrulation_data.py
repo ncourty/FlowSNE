@@ -16,9 +16,9 @@ Subsets (scVelo datasets):
 (filter/normalise, HVGs, moments, stochastic-mode velocity, velocity graph,
 PCA-space velocity -- scVelo's PCA projection needs the velocity graph, and
 using it keeps the velocities comparable with pancreas) and caches PCA
-coordinates, velocity in that space, cell type, stage, and optionally
-scVelo's velocity pseudotime and transition matrix (off by default for the
-full set, where they are slow).
+coordinates, velocity in that space, cell type, stage, scVelo's velocity
+transition matrix (a CellRank-style velocity kernel), and optionally its
+velocity pseudotime (off by default for the full set, where it is slow).
 
 The obs column names for cell type and stage are detected (the files are not
 guaranteed to use the same ones); what was found is printed and stored.
@@ -107,24 +107,29 @@ def preprocess(subset="full", n_pcs=30, n_top_genes=2000, mode="stochastic",
     out["stage"] = _stage_to_float(out["stage_label"])
     if "X_umap" in adata.obsm:
         out["X_umap"] = np.asarray(adata.obsm["X_umap"], dtype=np.float32)
+    # scVelo's velocity transition matrix (CellRank-style velocity kernel): cheap
+    # once the velocity graph exists, always kept (baseline for Markov-chain tests)
+    T = scv.tl.transition_matrix(adata).tocsr()
+    out.update(T_scvelo_data=T.data, T_scvelo_indices=T.indices, T_scvelo_indptr=T.indptr,
+               T_scvelo_shape=np.array(T.shape))
     if with_pseudotime:
         scv.tl.velocity_pseudotime(adata)
-        T = scv.tl.transition_matrix(adata).tocsr()
-        out.update(pseudotime=np.asarray(adata.obs["velocity_pseudotime"], dtype=np.float32),
-                   T_scvelo_data=T.data, T_scvelo_indices=T.indices, T_scvelo_indptr=T.indptr,
-                   T_scvelo_shape=np.array(T.shape))
-        print(f"  pseudotime / transition matrix done  ({time.time() - t0:.0f}s)", flush=True)
+        out["pseudotime"] = np.asarray(adata.obs["velocity_pseudotime"], dtype=np.float32)
+        print(f"  pseudotime done  ({time.time() - t0:.0f}s)", flush=True)
 
     np.savez_compressed(cache_path(subset), **out)
     print(f"  cached {cache_path(subset)}  ({out['X_pca'].shape[0]} cells, {n_pcs} PCs, "
           f"{time.time() - t0:.0f}s total)", flush=True)
 
 
-def load(subset="full", subsample=None, seed=0):
+def load(subset="full", subsample=None, seed=0, n_cells=None):
     """Dict with X_pca, V_pca (n, n_pcs), celltype, stage_label (str),
-    stage (float, embryonic day; NaN if unparsable), optionally X_umap,
-    pseudotime, T_scvelo. ``subsample``: at most this many cells per cell
-    type (keeps rare types)."""
+    stage (float, embryonic day; NaN if unparsable), T_scvelo, optionally
+    X_umap and pseudotime. ``subsample``: at most this many cells per cell
+    type (keeps rare types). ``n_cells``: a uniform random subset of this
+    size (keeps stage and cell-type proportions in expectation). Either way
+    T_scvelo is restricted to the kept cells and row-renormalised (which
+    drops transitions to removed cells)."""
     path = cache_path(subset)
     if not os.path.exists(path):
         preprocess(subset)
@@ -141,6 +146,14 @@ def load(subset="full", subsample=None, seed=0):
              else ci)(np.flatnonzero(out["celltype"] == c))
             for c in np.unique(out["celltype"])]))
         out = {k: (v[idx][:, idx] if k == "T_scvelo" else v[idx]) for k, v in out.items()}
+    if n_cells is not None and n_cells < len(out["X_pca"]):
+        idx = np.sort(np.random.default_rng(seed).choice(len(out["X_pca"]), size=n_cells,
+                                                          replace=False))
+        out = {k: (v[idx][:, idx] if k == "T_scvelo" else v[idx]) for k, v in out.items()}
+    if "T_scvelo" in out:
+        import scipy.sparse as sp
+        rs = np.asarray(out["T_scvelo"].sum(1)).ravel()
+        out["T_scvelo"] = (sp.diags(1.0 / np.clip(rs, 1e-12, None)) @ out["T_scvelo"]).tocsr()
     return out
 
 

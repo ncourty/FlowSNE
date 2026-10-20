@@ -16,3 +16,4 @@ article/figures/*.pdf
 experiments/**/*.mp4
 experiments/**/*.gif
 experiments/**/frames.npz
+experiments/**/Z_*.npy
