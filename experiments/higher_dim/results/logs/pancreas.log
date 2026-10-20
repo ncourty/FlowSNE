@@ -1,0 +1,11 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+[pancreas] d= 2 dof= 1.0 symmetric loss=+11.576  secs=+140.700  knn=+0.515  celltype_knn_acc=+0.880
+[pancreas] d= 2 dof= 1.0 flowsne   loss=+11.274  secs=+145.900  cos_ref=+0.815  cos_ref_median=+0.951  speed_spearman=+0.767  knn=+0.495  cos_scvelo=+0.781  pt_align=+0.332  scvelo_vs_ref=+0.965  celltype_knn_acc=+0.889
+[pancreas] d= 5 dof= 1.0 symmetric loss=+11.468  secs=+151.000  knn=+0.604  celltype_knn_acc=+0.877
+[pancreas] d= 5 dof= 1.0 flowsne   loss=+10.992  secs=+153.200  cos_ref=+0.793  cos_ref_median=+0.892  speed_spearman=+0.542  knn=+0.585  cos_scvelo=+0.710  pt_align=+0.219  scvelo_vs_ref=+0.962  celltype_knn_acc=+0.893
+[pancreas] d= 5 dof= 4.0 symmetric loss=+11.129  secs=+152.200  knn=+0.651  celltype_knn_acc=+0.897
+[pancreas] d= 5 dof= 4.0 flowsne   loss=+10.778  secs=+154.100  cos_ref=+0.689  cos_ref_median=+0.765  speed_spearman=+0.240  knn=+0.668  cos_scvelo=+0.614  pt_align=+0.292  scvelo_vs_ref=+0.963  celltype_knn_acc=+0.897
+[pancreas] d=10 dof= 1.0 symmetric loss=+11.452  secs=+156.100  knn=+0.612  celltype_knn_acc=+0.879
+[pancreas] d=10 dof= 1.0 flowsne   loss=+10.936  secs=+158.800  cos_ref=+0.809  cos_ref_median=+0.897  speed_spearman=+0.645  knn=+0.600  cos_scvelo=+0.719  pt_align=+0.073  scvelo_vs_ref=+0.957  celltype_knn_acc=+0.892
+[pancreas] d=10 dof= 9.0 symmetric loss=+10.960  secs=+160.000  knn=+0.719  celltype_knn_acc=+0.897
+[pancreas] d=10 dof= 9.0 flowsne   loss=+10.605  secs=+166.700  cos_ref=+0.499  cos_ref_median=+0.503  speed_spearman=-0.474  knn=+0.778  cos_scvelo=+0.454  pt_align=+0.184  scvelo_vs_ref=+0.935  celltype_knn_acc=+0.904

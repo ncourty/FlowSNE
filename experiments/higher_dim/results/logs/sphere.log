@@ -1,0 +1,11 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+[sphere] d= 2 dof= 1.0 symmetric loss=+12.151  secs=+246.700  knn=+0.684
+[sphere] d= 2 dof= 1.0 flowsne   loss=+11.605  secs=+262.400  cos_ref=+0.940  cos_ref_median=+0.993  speed_spearman=+0.742  knn=+0.793
+[sphere] d= 5 dof= 1.0 symmetric loss=+12.038  secs=+267.100  knn=+0.732
+[sphere] d= 5 dof= 1.0 flowsne   loss=+11.278  secs=+271.600  cos_ref=+0.975  cos_ref_median=+0.987  speed_spearman=+0.846  knn=+0.868
+[sphere] d= 5 dof= 4.0 symmetric loss=+11.598  secs=+273.600  knn=+0.742
+[sphere] d= 5 dof= 4.0 flowsne   loss=+11.017  secs=+255.000  cos_ref=+0.913  cos_ref_median=+0.931  speed_spearman=+0.937  knn=+0.936
+[sphere] d=10 dof= 1.0 symmetric loss=+12.033  secs=+173.400  knn=+0.731
+[sphere] d=10 dof= 1.0 flowsne   loss=+11.256  secs=+186.600  cos_ref=+0.972  cos_ref_median=+0.981  speed_spearman=+0.839  knn=+0.862
+[sphere] d=10 dof= 9.0 symmetric loss=+11.526  secs=+187.900  knn=+0.765
+[sphere] d=10 dof= 9.0 flowsne   loss=+10.982  secs=+185.900  cos_ref=+0.841  cos_ref_median=+0.871  speed_spearman=+0.886  knn=+0.938
