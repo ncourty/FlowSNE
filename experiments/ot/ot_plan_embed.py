@@ -322,7 +322,7 @@ def report(quick=False):
     L += ["", "Metrics: see the module docstring of `ot_plan_embed.py`. `plan_point` chance level "
           f"≈ 1/{info['n']}; `plan_cluster` = 1 means the 2-D plan moves the same mass between the "
           "same clusters as the high-D one.", "", "![embeddings](results/plan/plan.png)", ""]
-    open(os.path.join(HERE, f"RESULTS_plan{q}.md"), "w").write("\n".join(L))
+    open(os.path.join(HERE, f"RESULTS_plan{q}.md"), "w", encoding="utf-8").write("\n".join(L))
     _figure(q)
     print(f"wrote {os.path.join(HERE, f'RESULTS_plan{q}.md')}")
 

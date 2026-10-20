@@ -203,7 +203,7 @@ def write_report(out, res):
     L += ["| kernel | " + " | ".join(stages) + " |", "|---|" + "---|" * len(stages)]
     for name, r in out["kernels"].items():
         L.append(f"| {name} | " + " | ".join(f"{r['by_stage_k5'][s]:+.3f}" for s in stages) + " |")
-    open(os.path.join(res, "RESULTS.md"), "w").write("\n".join(L) + "\n")
+    open(os.path.join(res, "RESULTS.md"), "w", encoding="utf-8").write("\n".join(L) + "\n")
     print("wrote", os.path.join(res, "RESULTS.md"))
 
 

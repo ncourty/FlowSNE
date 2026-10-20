@@ -128,7 +128,7 @@ def report():
             L.append(f"| {r['d']} | {r['dof']:g} | {r['method']} | " + " | ".join(
                 f"{r[k]:.3f}" if k in r else "–" for k in keys) + f" | {r['secs']:.0f} |")
         L.append("")
-    open(os.path.join(HERE, "RESULTS.md"), "w").write("\n".join(L))
+    open(os.path.join(HERE, "RESULTS.md"), "w", encoding="utf-8").write("\n".join(L))
     print("wrote", os.path.join(HERE, "RESULTS.md"))
 
 

@@ -336,7 +336,7 @@ def report():
                      + f" | {np.mean([r['secs'] for r in rr]):.0f} |")
         L.append("")
     L += ["![embeddings](results/comparison.png)", ""]
-    open(os.path.join(HERE, "RESULTS.md"), "w").write("\n".join(L))
+    open(os.path.join(HERE, "RESULTS.md"), "w", encoding="utf-8").write("\n".join(L))
     _figure()
     print("wrote RESULTS.md")
 

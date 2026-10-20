@@ -235,7 +235,7 @@ def report(quick=False):
                  + " | ".join(ms([r[k] for r in sel if k in r]) for k in keys) + " |"
                  + (f" ⚠ {nerr} failed" if nerr else ""))
     L += ["", "![embeddings](results/separated/sep.png)", ""]
-    open(os.path.join(HERE, f"RESULTS_separated{q}.md"), "w").write("\n".join(L))
+    open(os.path.join(HERE, f"RESULTS_separated{q}.md"), "w", encoding="utf-8").write("\n".join(L))
     _figure(q)
     print(f"wrote RESULTS_separated{q}.md")
 

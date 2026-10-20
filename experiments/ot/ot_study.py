@@ -477,7 +477,7 @@ def report(quick=False):
         _embed_figure(q)
         lines += ["![embeddings](results/embed.png)", ""]
     path = os.path.join(HERE, f"RESULTS{q}.md")
-    open(path, "w").write("\n".join(lines))
+    open(path, "w", encoding="utf-8").write("\n".join(lines))
     print(f"wrote {path}")
 
 
