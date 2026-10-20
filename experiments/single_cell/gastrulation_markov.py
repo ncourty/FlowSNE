@@ -1,4 +1,8 @@
-"""Does a FlowSNE embedding carry a useful directed Markov chain? Scored
+"""SUPERSEDED by gastrulation_repr.py: the scVelo baseline here is circular
+(FlowSNE's input drift is derived from scVelo's own transition matrix). Kept
+for its chain helpers, which gastrulation_repr.py imports.
+
+Does a FlowSNE embedding carry a useful directed Markov chain? Scored
 against REAL developmental time (mouse gastrulation, embryonic stage
 E6.5-E8.5; see gastrulation_data.py).
 

@@ -38,6 +38,7 @@ import numpy as np
 
 DATA = os.path.join(os.path.dirname(__file__), "data")
 LOADERS = {"full": "gastrulation", "e75": "gastrulation_e75", "erythroid": "gastrulation_erythroid"}
+PREP_VERSION = 2       # 2: our own PCA (not the file's) + direct velocity projection
 CELLTYPE_KEYS = ("celltype", "cell_type", "clusters", "celltype_extended")
 STAGE_KEYS = ("stage", "time", "day", "embryo_stage")
 
@@ -89,15 +90,47 @@ def preprocess(subset="full", n_pcs=30, n_top_genes=2000, mode="stochastic",
     sc.pp.log1p(adata)                       # see pancreas_data.py: layers stay linear
     sc.pp.highly_variable_genes(adata, n_top_genes=n_top_genes)
     adata = adata[:, adata.var.highly_variable].copy()
+    # The files ship a precomputed X_pca from the authors' own preprocessing (and
+    # no loadings), which scVelo would silently reuse. Compute OUR PCA on the
+    # log-normalised HVGs instead, keeping the loadings (100 components; the
+    # first n_pcs drive the neighbour graph, moments and positions).
+    adata.obsm.pop("X_pca", None)
+    sc.pp.pca(adata, n_comps=100)
     scv.pp.moments(adata, n_pcs=n_pcs, n_neighbors=30)
     scv.tl.velocity(adata, mode=mode)
     scv.tl.velocity_graph(adata)
     scv.tl.velocity_embedding(adata, basis="pca")
     print(f"  velocity + velocity graph done  ({time.time() - t0:.0f}s)", flush=True)
 
+    # Direct velocity in PCA space, independent of scVelo's transition matrix:
+    # the velocity of the velocity genes (the ones scVelo trusts), converted to
+    # the log space PCA lives in (d log(1 + s) = ds / (1 + s), s the smoothed
+    # spliced expression), projected on the PCA loadings -- a linear map, so
+    # nothing but the part outside the PCA subspace is lost.
+    vel = np.nan_to_num(np.asarray(adata.layers["velocity"], dtype=np.float64))
+    vel[:, ~adata.var["velocity_genes"].values.astype(bool)] = 0.0
+    v_log = vel / (1.0 + np.asarray(adata.layers["Ms"], dtype=np.float64))
+    PCs = np.asarray(adata.varm["PCs"], dtype=np.float64)              # genes x 100, orthonormal
+    V_direct = v_log @ PCs
+    v_norm = np.linalg.norm(v_log, axis=1)
+    frac = {d: np.linalg.norm(V_direct[:, :d], axis=1) / np.maximum(v_norm, 1e-30)
+            for d in (n_pcs, 50, 100)}
+    V_T = np.asarray(adata.obsm["velocity_pca"][:, :n_pcs], dtype=np.float64)
+    den = np.linalg.norm(V_T, axis=1) * np.linalg.norm(V_direct[:, :n_pcs], axis=1)
+    cos_T_direct = np.where(den > 0, (V_T * V_direct[:, :n_pcs]).sum(1) / np.where(den > 0, den, 1), 0)
+    print(f"  direct velocity: {int(adata.var['velocity_genes'].sum())} velocity genes; share of its "
+          f"norm in the first {n_pcs}/50/100 PCs: " + "/".join(f"{np.median(frac[d]):.2f}" for d in frac)
+          + f" (median); cos with scVelo's transition-matrix projection: median "
+          f"{np.median(cos_T_direct):+.2f}", flush=True)
+
     out = dict(
+        prep_version=np.array(PREP_VERSION),
         X_pca=np.asarray(adata.obsm["X_pca"][:, :n_pcs], dtype=np.float32),
-        V_pca=np.asarray(adata.obsm["velocity_pca"][:, :n_pcs], dtype=np.float32),
+        X_pca100=np.asarray(adata.obsm["X_pca"], dtype=np.float32),
+        V_pca=np.asarray(V_T, dtype=np.float32),                 # scVelo's (from its transition matrix)
+        V_pca_direct=np.asarray(V_direct, dtype=np.float32),     # direct, 100 components
+        vel_share_30=frac[n_pcs].astype(np.float32), vel_share_50=frac[50].astype(np.float32),
+        vel_share_100=frac[100].astype(np.float32), cos_T_direct=cos_T_direct.astype(np.float32),
         celltype=(adata.obs[ct_key].astype(str).values if ct_key
                   else np.array(["?"] * adata.n_obs)),
         stage_label=(adata.obs[st_key].astype(str).values if st_key
@@ -134,7 +167,12 @@ def load(subset="full", subsample=None, seed=0, n_cells=None):
     if not os.path.exists(path):
         preprocess(subset)
     d = np.load(path, allow_pickle=True)
-    out = {k: d[k] for k in d.files if not k.startswith("T_scvelo") and not k.endswith("_key")}
+    version = int(d["prep_version"]) if "prep_version" in d.files else 1
+    if version < PREP_VERSION:
+        raise RuntimeError(f"{path} is from an older preprocessing (no own PCA / direct velocity): "
+                           f"re-run gastrulation_data.py --subset {subset} --force")
+    out = {k: d[k] for k in d.files if not k.startswith("T_scvelo") and not k.endswith("_key")
+           and k != "prep_version"}
     if "T_scvelo_data" in d.files:
         import scipy.sparse as sp
         out["T_scvelo"] = sp.csr_matrix((d["T_scvelo_data"], d["T_scvelo_indices"],
@@ -160,11 +198,16 @@ def load(subset="full", subsample=None, seed=0, n_cells=None):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--subset", choices=list(LOADERS), default="full")
+    ap.add_argument("--force", action="store_true", help="redo preprocessing even if cached")
     ap.add_argument("--with-pseudotime", action="store_true",
                     help="also compute scVelo's velocity pseudotime and transition matrix "
                          "(default: on for subsets, off for 'full')")
     a = ap.parse_args()
-    if not os.path.exists(cache_path(a.subset)):
+    stale = (os.path.exists(cache_path(a.subset)) and
+             int(np.load(cache_path(a.subset)).get("prep_version", 1)) < PREP_VERSION)
+    if a.force or stale or not os.path.exists(cache_path(a.subset)):
+        if stale:
+            print(f"{cache_path(a.subset)}: older preprocessing, redoing it")
         preprocess(a.subset, with_pseudotime=True if a.with_pseudotime else None)
     d = load(a.subset)
     n = d["X_pca"].shape[0]
