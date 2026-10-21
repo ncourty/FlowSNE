@@ -38,6 +38,7 @@ from .distances import (
     DriftMode, bounded_direction, randers_distance, randers_distance_indexed,
     randers_distance_lazy, randers_distance_pairs, randers_knn, rescale_admissible,
 )
+from .flows import mlp_flow, potential_flow
 
 
 def _segment_logsumexp(values: torch.Tensor, segments: torch.Tensor, n: int) -> torch.Tensor:
@@ -84,10 +85,19 @@ class EntropicRandersAffinity(LogAffinity):
         (default) uses ``sqrt(n)`` -- a scale-adaptive default that avoids
         the failure mode of a FIXED target (e.g. a fixed neighbour count)
         becoming an ever-shrinking fraction of the dataset as ``n`` grows.
-    drift_mode : {"frozen", "averaged"}, optional
+    drift_mode : {"frozen", "averaged", "potential"}, optional
         Which closed-form Randers distance approximation to use (see
         ``distances.py``). Default "averaged" (one order more accurate,
-        same cost).
+        same cost). "potential": the drift is a gradient, ``omega`` is then
+        a FORWARD potential psi (shape (n,), higher = later), and the cost is
+        the exact ``||x_j - x_i|| - (psi_j - psi_i)`` -- see ``omega_scale``.
+    cost_power : float, optional
+        The ground cost is ``d_F ** cost_power``. Default 2 (SNE's squared
+        distance). With 1 and ``drift_mode="potential"``, the row-stochastic
+        affinity is EXACTLY the symmetric one with each row's targets
+        reweighted by ``exp(psi_j / tau_i)`` (the ``-psi_i`` term cancels in
+        the row normalisation, per-row bandwidths included); with 2 it does
+        not factorise.
     max_omega_norm : float, optional
         The given drift is globally rescaled (preserving relative
         magnitude across points) so its largest norm equals this value,
@@ -99,6 +109,11 @@ class EntropicRandersAffinity(LogAffinity):
         one scale (e.g. snapshots over time, where the drift's magnitude
         changes and that change should stay visible). Every scaled norm
         must then be below ``max_omega_norm`` (checked). Default None.
+        With ``drift_mode="potential"`` there is no automatic rescaling (a
+        potential's admissibility, 1-Lipschitz, is a property of pairs, not
+        of points): ``omega_scale * psi`` is used as given (default scale 1),
+        and making it 1-Lipschitz over the pairs that matter is the caller's
+        job; inadmissible pairs get distance 0 (clamped).
     doubly_stochastic : bool, optional
         Sinkhorn-balance to uniform marginals (default True) or leave as a
         plain row-stochastic softmax (False). See above.
@@ -154,6 +169,7 @@ class EntropicRandersAffinity(LogAffinity):
         drift_mode: DriftMode = "averaged",
         max_omega_norm: float = 0.95,
         doubly_stochastic: bool = True,
+        cost_power: float = 2.0,
         sinkhorn_iters: int = 5000,
         sinkhorn_tol: float = 1e-9,
         perplexity_iters: int = 50,
@@ -203,6 +219,7 @@ class EntropicRandersAffinity(LogAffinity):
         self.sparsity = sparsity
         self.n_neighbors = n_neighbors
         self.omega_scale = omega_scale
+        self.cost_power = cost_power
 
     def _calibrate_bandwidth(self, C: torch.Tensor, target_perplexity: float) -> torch.Tensor:
         """Per-row bisection for tau such that softmax(-C/tau) has the
@@ -275,6 +292,19 @@ class EntropicRandersAffinity(LogAffinity):
         X = X.to(device=device, dtype=dtype)
         if omega is None:
             omega = self._omega_default
+        if self.drift_mode == "potential":
+            n = X.shape[0]
+            psi = (X.new_zeros(n) if omega is None else
+                   torch.as_tensor(omega, dtype=dtype, device=device).reshape(-1))
+            if psi.shape[0] != n:
+                raise ValueError(
+                    f"[EntropicRandersAffinity] a potential needs one value per point "
+                    f"({n}), got {psi.shape[0]}."
+                )
+            # same sign convention as below: the cost uses -psi, so moving up
+            # the forward potential is cheaper
+            scale = 1.0 if self.omega_scale is None else self.omega_scale
+            return X, -scale * psi
         if omega is None:
             omega = torch.zeros_like(X)
         else:
@@ -318,7 +348,7 @@ class EntropicRandersAffinity(LogAffinity):
             )
         d, indices = randers_knn(X, omega_scaled, k, mode=self.drift_mode,
                                  backend=self.backend)
-        C = d ** 2
+        C = d ** self.cost_power
         tau = self._calibrate_bandwidth(C, target_perp)
         c_min = C.min(dim=1).values
         if not self.doubly_stochastic:
@@ -332,7 +362,8 @@ class EntropicRandersAffinity(LogAffinity):
         cols_k = indices.reshape(-1)
         keys = torch.unique(torch.cat([rows_k * n + cols_k, cols_k * n + rows_k]))  # row-major
         rows, cols = keys // n, keys % n
-        C_e = randers_distance_pairs(X, omega_scaled, rows, cols, mode=self.drift_mode) ** 2
+        C_e = randers_distance_pairs(X, omega_scaled, rows, cols,
+                                     mode=self.drift_mode) ** self.cost_power
         log_k = -(C_e - c_min[rows]) / tau[rows]
         log_p = self._sparse_sinkhorn(rows, cols, log_k, n)
 
@@ -370,7 +401,7 @@ class EntropicRandersAffinity(LogAffinity):
         X, omega_scaled = self._prepare(X, omega)
         device = X.device
 
-        C = randers_distance(X, omega_scaled, mode=self.drift_mode) ** 2
+        C = randers_distance(X, omega_scaled, mode=self.drift_mode) ** self.cost_power
         diag_mask = torch.eye(n, dtype=torch.bool, device=device)
         C = C.masked_fill(diag_mask, float("inf"))
 
@@ -416,6 +447,16 @@ class RandersAffinity(NormalizedStudentAffinity):
     (``distances.bounded_direction``), so the network's own output is raw
     and unconstrained.
 
+    ``drift_mode="potential"``: the drift is a gradient, omega = grad(h), and
+    the distance is the exact ``||z_j - z_i|| + h(z_j) - h(z_i)``. ``flow``
+    then maps ``(n, n_components) -> (n, 1)`` and must be 1-Lipschitz
+    (``flowsne.flows.potential_flow`` is, by construction); the potential is
+    ``h = max_omega_norm * flow(z)`` (``potential_at``), so it is
+    ``max_omega_norm``-Lipschitz everywhere, not only at the points.
+    ``omega_at`` returns grad(h) (autograd), with the same sign convention:
+    the favoured direction is ``-omega_at(Z)``, i.e. down h; ``-h`` is the
+    forward landscape.
+
     Fit ``(Z, flow.parameters())`` jointly via
     ``flowsne.embedding.JointAffinityMatcher`` -- an ordinary, single-loop
     optimisation (``flow(Z)`` is just an ordinary differentiable function
@@ -429,8 +470,9 @@ class RandersAffinity(NormalizedStudentAffinity):
         ``n_components``, and the ``flow`` network's input/output size.
     flow : nn.Module, optional
         The drift network. Default ``mlp_flow(n_components)`` (a small
-        zero-initialised Tanh MLP).
-    drift_mode : {"frozen", "averaged"}, optional
+        zero-initialised Tanh MLP), or ``potential_flow(n_components)`` with
+        ``drift_mode="potential"``.
+    drift_mode : {"frozen", "averaged", "potential"}, optional
         Default "averaged".
     max_omega_norm : float, optional
         Admissibility bound :math:`\rho` on :math:`\lVert\omega\rVert`.
@@ -479,7 +521,22 @@ class RandersAffinity(NormalizedStudentAffinity):
         self.n_components = n_components
         self.drift_mode = drift_mode
         self.max_omega_norm = max_omega_norm
-        self.flow = flow if flow is not None else mlp_flow(n_components)
+        if flow is None:
+            flow = potential_flow(n_components) if drift_mode == "potential" else mlp_flow(n_components)
+        self.flow = flow
+
+    def potential_at(self, Z: torch.Tensor) -> torch.Tensor:
+        """The fitted potential h at every row of ``Z``, shape (n,)
+        (``drift_mode="potential"`` only)."""
+        if self.drift_mode != "potential":
+            raise ValueError("[RandersAffinity] potential_at needs drift_mode='potential'.")
+        return self.max_omega_norm * self.flow(Z).reshape(Z.shape[0])
+
+    def _field(self, Z: torch.Tensor) -> torch.Tensor:
+        """What the distance functions take: the potential (n,) or the
+        admissible drift (n, d)."""
+        field = self.potential_at(Z) if self.drift_mode == "potential" else self.omega_at(Z)
+        return field.to(dtype=Z.dtype, device=Z.device)
 
     def omega_at(self, Z: torch.Tensor) -> torch.Tensor:
         """The fitted drift field at every row of ``Z`` -- for inspecting
@@ -488,7 +545,12 @@ class RandersAffinity(NormalizedStudentAffinity):
         correctly-fit omega points AWAY from the direction the affinity
         favours (moving with omega makes the distance larger, not
         smaller) -- plot ``-omega_at(Z)`` for the "flow direction", not the
-        raw value."""
+        raw value. With ``drift_mode="potential"``: grad(h) by autograd
+        (detached, also under ``torch.no_grad``)."""
+        if self.drift_mode == "potential":
+            with torch.enable_grad():
+                Zg = Z.detach().requires_grad_(True)
+                return torch.autograd.grad(self.potential_at(Zg).sum(), Zg)[0]
         raw = self.flow(Z)
         return bounded_direction(raw, self.max_omega_norm, dim=-1)
 
@@ -504,8 +566,7 @@ class RandersAffinity(NormalizedStudentAffinity):
                 f"[{type(self).__name__}] embedding has {m} dimensions, "
                 f"expected n_components={self.n_components}."
             )
-        omega_field = self.omega_at(Z).to(dtype=Z.dtype, device=Z.device)
-        return self._cost(Z, omega_field)
+        return self._cost(Z, self._field(Z))
 
     def _cost(self, Z: torch.Tensor, omega_field: torch.Tensor):
         """Squared Randers cost, dense or lazy, diagonal excluded with a
@@ -552,7 +613,7 @@ class RandersAffinity(NormalizedStudentAffinity):
             raise NotImplementedError(
                 "[RandersAffinity] cross_entropy assumes normalization_dim=(0, 1)."
             )
-        omega = self.omega_at(Z).to(dtype=Z.dtype, device=Z.device)
+        omega = self._field(Z)
         log_kernel = self._log_kernel(self._cost(Z, omega))
         if self.backend == "keops":
             log_Z = torch.logsumexp(log_kernel.logsumexp(dim=1).reshape(-1), dim=0)

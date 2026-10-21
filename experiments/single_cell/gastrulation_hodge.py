@@ -31,7 +31,8 @@ velocity projection and for scVelo's transition-matrix projection:
   walk       gastrulation_repr.py's cosine walk in the 30-PC space with each
              part's vectors: days gained after s steps over the direction-blind
              walk (k = 30)
-  by type    gradient share on the edges inside each cell type
+  by type    gradient share within each cell type: the flow on the edges
+             inside the type, decomposed on that subgraph alone
 
 Run (GPU server, needs the cached full preprocessing):
     python experiments/single_cell/gastrulation_hodge.py --subset full --n-cells 30000
@@ -158,10 +159,12 @@ def main():
         parts = {"full": f, "gradient": g, "rest": r}
         U = {p: cell_vectors(X, E, v) for p, v in parts.items()}
         within = {}
-        for c in np.unique(celltype):
+        for c in np.unique(celltype):        # each type's own subgraph, decomposed separately
             sel = (celltype[E[:, 0]] == c) & (celltype[E[:, 1]] == c)
             if sel.sum() >= 50:
-                within[c] = float((g[sel] ** 2).sum() / max((f[sel] ** 2).sum(), 1e-300))
+                nodes, Es = np.unique(E[sel], return_inverse=True)
+                _, gs, _ = hodge(incidence(Es.reshape(-1, 2), len(nodes)), f[sel])
+                within[c] = float((gs ** 2).sum() / max((f[sel] ** 2).sum(), 1e-300))
         o = dict(mean_share=mean_share, gradient_share=float((g ** 2).sum() / (f ** 2).sum()),
                  gradient_share_null=nulls,
                  phi_stage_spearman=float(spearmanr(phi, stage)[0]),
@@ -204,7 +207,7 @@ def write_report(out, res):
         rows = {"raw velocity": o["walk_raw_velocity"], **o["walk"]}
         for p, w in rows.items():
             L.append(f"| {nm} | {p} | " + " | ".join(f"{w[f's{s}']:+.3f}" for s in steps) + " |")
-    L += ["", "## Gradient share on edges inside each cell type", "",
+    L += ["", "## Gradient share within each cell type (its own subgraph, decomposed separately)", "",
           "| cell type | " + " | ".join(out["velocities"]) + " |", "|---|" + "---|" * len(out["velocities"])]
     types = sorted({c for o in out["velocities"].values() for c in o["gradient_share_by_celltype"]},
                    key=lambda c: -out["velocities"]["direct"]["gradient_share_by_celltype"].get(c, 0))

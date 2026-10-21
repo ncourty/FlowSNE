@@ -21,6 +21,17 @@ accurate as x and y get close:
   available (given per-point on the input side, cheap to evaluate anywhere
   for a network on the output side).
 
+A third mode is EXACT rather than approximate, for a gradient drift
+omega = grad(phi): the drift term integrates to phi(y) - phi(x) along any
+path, so the infimum is the straight line and
+
+- ``potential``: d_F(x->y) = ||y-x|| + phi(y) - phi(x)
+
+In this mode the ``omega_field`` argument of every function below is the
+potential itself, one value per point (shape (n,) or (n, 1)), not a vector
+field. Admissibility (d_F >= 0) needs phi to be 1-Lipschitz; distances are
+clamped at 0 as in the other modes.
+
 No heat-kernel or graph-diffusion approximation of the Finsler distance is
 implemented here -- this project intentionally keeps only these two
 closed-form approximations.
@@ -32,7 +43,12 @@ from typing import Literal
 
 import torch
 
-DriftMode = Literal["frozen", "averaged"]
+DriftMode = Literal["frozen", "averaged", "potential"]
+
+
+def _phi(omega_field: torch.Tensor) -> torch.Tensor:
+    """The potential, flattened to (n,) (``mode="potential"``)."""
+    return omega_field.reshape(omega_field.shape[0])
 
 
 def pairwise_delta(Z: torch.Tensor) -> torch.Tensor:
@@ -54,6 +70,7 @@ def drift_term(
 
     - frozen:   (z_j - z_i) . omega_i                 = M_ij - s_i
     - averaged: (z_j - z_i) . (omega_i + omega_j) / 2 = (M_ij - M_ji + s_j - s_i) / 2
+    - potential: phi_j - phi_i, with ``omega_field`` the potential phi (n,)
 
     The averaged term is exactly antisymmetric (A_ij = -A_ji), so
     ``bdF`` is a symmetric distance plus an antisymmetric tilt.
@@ -63,20 +80,24 @@ def drift_term(
     Z : Tensor, shape (n, d)
     omega_field : Tensor, shape (n, d)
         ``omega_field[i]`` is the drift evaluated at ``z_i``.
-    mode : {"frozen", "averaged"}
-        Which closed-form approximation to use.
+    mode : {"frozen", "averaged", "potential"}
+        Which closed-form approximation to use (``potential``: exact, and
+        ``omega_field`` is the potential, shape (n,) or (n, 1)).
 
     Returns
     -------
     Tensor, shape (n, n)
     """
+    if mode == "potential":
+        phi = _phi(omega_field)
+        return phi.unsqueeze(0) - phi.unsqueeze(1)
     M = omega_field @ Z.T
     s = (omega_field * Z).sum(-1)
     if mode == "frozen":
         return M - s.unsqueeze(1)
     if mode == "averaged":
         return 0.5 * (M - M.T + s.unsqueeze(0) - s.unsqueeze(1))
-    raise ValueError(f"mode must be 'frozen' or 'averaged', got {mode!r}")
+    raise ValueError(f"mode must be 'frozen', 'averaged' or 'potential', got {mode!r}")
 
 
 def randers_distance(
@@ -115,16 +136,18 @@ def randers_distance_lazy(
     from pykeops.torch import LazyTensor
 
     z_i, z_j = LazyTensor(Z[:, None, :]), LazyTensor(Z[None, :, :])
-    w_i = LazyTensor(omega_field[:, None, :])
     dz = z_j - z_i
     norm = (dz.sqnorm2() + eps).sqrt()
-    if mode == "frozen":
-        drift = (w_i | dz)
+    if mode == "potential":
+        phi = _phi(omega_field).contiguous()
+        drift = LazyTensor(phi[None, :, None]) - LazyTensor(phi[:, None, None])
+    elif mode == "frozen":
+        drift = (LazyTensor(omega_field[:, None, :]) | dz)
     elif mode == "averaged":
-        w_j = LazyTensor(omega_field[None, :, :])
+        w_i, w_j = LazyTensor(omega_field[:, None, :]), LazyTensor(omega_field[None, :, :])
         drift = 0.5 * ((w_i + w_j) | dz)
     else:
-        raise ValueError(f"mode must be 'frozen' or 'averaged', got {mode!r}")
+        raise ValueError(f"mode must be 'frozen', 'averaged' or 'potential', got {mode!r}")
     return (norm + drift).relu()
 
 
@@ -147,13 +170,16 @@ def randers_distance_indexed(
         idx = indices[s:s + rows]
         dz = Z[idx] - Z[s:s + rows, None, :]                       # (r, k, d)
         norm = torch.sqrt((dz ** 2).sum(-1) + eps)
-        if mode == "frozen":
-            w = omega_field[s:s + rows, None, :]
+        if mode == "potential":
+            phi = _phi(omega_field)
+            drift = phi[idx] - phi[s:s + rows, None]
+        elif mode == "frozen":
+            drift = (omega_field[s:s + rows, None, :] * dz).sum(-1)
         elif mode == "averaged":
-            w = 0.5 * (omega_field[s:s + rows, None, :] + omega_field[idx])
+            drift = (0.5 * (omega_field[s:s + rows, None, :] + omega_field[idx]) * dz).sum(-1)
         else:
-            raise ValueError(f"mode must be 'frozen' or 'averaged', got {mode!r}")
-        out.append((norm + (w * dz).sum(-1)).clamp_min(0.0))
+            raise ValueError(f"mode must be 'frozen', 'averaged' or 'potential', got {mode!r}")
+        out.append((norm + drift).clamp_min(0.0))
     return torch.cat(out, dim=0)
 
 
@@ -176,13 +202,16 @@ def randers_distance_pairs(
         r, c = rows[s:s + step], cols[s:s + step]
         dz = Z[c] - Z[r]
         norm = torch.sqrt((dz ** 2).sum(-1) + eps)
-        if mode == "frozen":
-            w = omega_field[r]
+        if mode == "potential":
+            phi = _phi(omega_field)
+            drift = phi[c] - phi[r]
+        elif mode == "frozen":
+            drift = (omega_field[r] * dz).sum(-1)
         elif mode == "averaged":
-            w = 0.5 * (omega_field[r] + omega_field[c])
+            drift = (0.5 * (omega_field[r] + omega_field[c]) * dz).sum(-1)
         else:
-            raise ValueError(f"mode must be 'frozen' or 'averaged', got {mode!r}")
-        out.append((norm + (w * dz).sum(-1)).clamp_min(0.0))
+            raise ValueError(f"mode must be 'frozen', 'averaged' or 'potential', got {mode!r}")
+        out.append((norm + drift).clamp_min(0.0))
     return torch.cat(out) if out else Z.new_zeros(0)
 
 

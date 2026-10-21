@@ -7,6 +7,10 @@ embedding has thousands of points (streamlines get cluttered).
   ``default_bins(n)`` picks the grid size.
 - ``direction_colors`` / ``direction_wheel``: colour each point by its
   flow direction (hue) and speed (saturation); no glyphs at all.
+- ``potential_map``: for a gradient (potential) flow, the landscape itself:
+  bands between level sets as a background, faded away from the data, with
+  the level-set lines on top; ``quantile_levels`` puts each band around the
+  same share of points (isochrones of a pseudotime).
 - ``divergence_map``: the divergence of the fitted field, computed exactly
   with autograd from the flow network, as a background heatmap -- sources
   (where points flow away from) in red, sinks (where they converge) in
@@ -148,6 +152,22 @@ def direction_wheel(ax_inset, n=120):
         s.set_visible(False)
 
 
+def _grid(lo, hi, res):
+    return np.meshgrid(np.linspace(lo[0], hi[0], res), np.linspace(lo[1], hi[1], res))
+
+
+def _density_alpha(Z, lo, hi, res, density_floor):
+    """Opacity per grid pixel: sqrt of the smoothed point density relative to
+    its 95th percentile, zero below ``density_floor`` (no data there)."""
+    from scipy.ndimage import gaussian_filter
+    dens, _, _ = np.histogram2d(Z[:, 1], Z[:, 0], bins=res, range=[[lo[1], hi[1]], [lo[0], hi[0]]])
+    dens = gaussian_filter(dens, sigma=res / 60)
+    rel = np.clip(dens / max(np.percentile(dens[dens > 0], 95), 1e-12), 0, 1)
+    alpha = np.sqrt(rel)                        # boost moderate densities ...
+    alpha[rel < density_floor] = 0.0            # ... but nothing where data are absent
+    return alpha
+
+
 def divergence_map(ax, field, Z, res=120, lo=None, hi=None, vmax=None, density_floor=0.08,
                    cmap="RdBu_r", zorder=0):
     """Background heatmap of the field's divergence (red = source, blue =
@@ -156,16 +176,10 @@ def divergence_map(ax, field, Z, res=120, lo=None, hi=None, vmax=None, density_f
     that relative density is below ``density_floor`` (where the divergence is
     the network extrapolating between clusters). Returns (image, vmax) so panels can share the colour
     scale."""
-    from scipy.ndimage import gaussian_filter
     lo, hi = _bounds(Z, lo=lo, hi=hi)
-    xs, ys = np.linspace(lo[0], hi[0], res), np.linspace(lo[1], hi[1], res)
-    GX, GY = np.meshgrid(xs, ys)
+    GX, GY = _grid(lo, hi, res)
     div = field.divergence(np.stack([GX.ravel(), GY.ravel()], 1)).reshape(res, res)
-    dens, _, _ = np.histogram2d(Z[:, 1], Z[:, 0], bins=res, range=[[lo[1], hi[1]], [lo[0], hi[0]]])
-    dens = gaussian_filter(dens, sigma=res / 60)
-    rel = np.clip(dens / max(np.percentile(dens[dens > 0], 95), 1e-12), 0, 1)
-    alpha = np.sqrt(rel)                        # boost moderate densities ...
-    alpha[rel < density_floor] = 0.0            # ... but nothing where data are absent
+    alpha = _density_alpha(Z, lo, hi, res, density_floor)
     if vmax is None:
         vmax = max(np.percentile(np.abs(div[alpha > 0.2]), 98) if (alpha > 0.2).any() else 1e-12,
                    1e-12)
@@ -176,3 +190,40 @@ def divergence_map(ax, field, Z, res=120, lo=None, hi=None, vmax=None, density_f
     im = ax.imshow(rgba, origin="lower", extent=(lo[0], hi[0], lo[1], hi[1]), aspect="auto",
                    zorder=zorder, interpolation="bilinear")
     return im, vmax
+
+
+def quantile_levels(values, n_bands=10):
+    """Level values splitting ``values`` (the potential at the points) into
+    ``n_bands`` bands holding equal shares of points."""
+    return np.quantile(values, np.linspace(0, 1, n_bands + 1))
+
+
+def potential_map(ax, potential, Z, levels, res=200, lo=None, hi=None, density_floor=0.08,
+                  cmap="viridis", lines=True, line_color="k", zorder=0):
+    """Landscape of a scalar potential over a 2-D embedding: pixels coloured
+    by the band between consecutive ``levels`` they fall in, opacity from the
+    point density (as in ``divergence_map``), and the level sets drawn as
+    lines where there are data. ``potential`` maps (m, 2) points to (m,)
+    values -- e.g. ``lambda P: -aff.potential_at(torch.tensor(P)).numpy()``
+    for a fitted ``RandersAffinity(drift_mode="potential")`` (``-h`` is the
+    forward landscape), or an interpolator of per-point values. Returns
+    (ScalarMappable, levels) for a colorbar shared across panels."""
+    from matplotlib import colormaps
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import BoundaryNorm
+    lo, hi = _bounds(Z, lo=lo, hi=hi)
+    GX, GY = _grid(lo, hi, res)
+    H = np.asarray(potential(np.stack([GX.ravel(), GY.ravel()], 1)), dtype=float).reshape(res, res)
+    alpha = _density_alpha(Z, lo, hi, res, density_floor)
+    levels = np.asarray(levels, dtype=float)
+    norm = BoundaryNorm(levels, colormaps[cmap].N, extend="both")
+    rgba = colormaps[cmap](norm(np.nan_to_num(H, nan=levels[0])))
+    rgba[..., 3] = alpha * 0.75
+    rgba[np.isnan(H), 3] = 0.0
+    ax.imshow(rgba, origin="lower", extent=(lo[0], hi[0], lo[1], hi[1]), aspect="auto",
+              zorder=zorder, interpolation="nearest")
+    if lines:
+        Hm = np.ma.masked_where((alpha < 0.05) | np.isnan(H), H)
+        ax.contour(GX, GY, Hm, levels=levels[1:-1], colors=line_color, linewidths=0.6,
+                   alpha=0.7, zorder=zorder + 0.5)
+    return ScalarMappable(norm=norm, cmap=cmap), levels

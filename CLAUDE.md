@@ -49,6 +49,28 @@ derived error bound. **This repo keeps only those two**:
   the frozen version everywhere tested, including on joint-fit stability
   (same probe verdict as the frozen version on every domain checked).
 
+A third mode, `drift_mode="potential"`, is **exact**: for a gradient drift
+`omega = grad(phi)` the drift term integrates to `phi(y) - phi(x)` along any
+path, so `d_F(x->y) = ||y-x|| + phi(y) - phi(x)` (admissible iff `phi` is
+1-Lipschitz). The distance functions then take the potential (n,) in place
+of the field. Input side: pass a FORWARD potential (higher = later) with an
+explicit `omega_scale` (no automatic rescaling; Lipschitz is a property of
+pairs), and `cost_power=1` makes the row-stochastic affinity exactly the
+symmetric one with targets reweighted by `exp(psi_j/tau_i)`. Output side:
+`potential_flow` (spectrally clipped, 1-Lipschitz by construction, scalar
+output), `potential_at(Z)` gives h, `omega_at(Z)` gives grad h. Motivation:
+on gastrulation the velocity's forward-in-time content is almost entirely its
+gradient part (Hodge decomposition, `experiments/single_cell/
+gastrulation_hodge.py`). Gauge caveat: under a Gibbs kernel with a global
+bandwidth, a gradient drift is absorbed entirely by Sinkhorn balancing, so
+use it row-stochastic. Outcome so far (Oct 2026, pancreas + dentate gyrus,
+`experiments/single_cell/landscape_local.py`): building the potential into
+the map (network h, or the input psi itself with a learned scale) gives a
+slightly WORSE layout than the symmetric one, and no better landscape than
+drawing psi's level sets on the symmetric map -- a per-cell scalar needs no
+asymmetric geometry. Whatever FlowSNE adds must come from the non-gradient
+(rotational) part of the drift.
+
 No graph/heat-kernel/eikonal machinery is implemented here. If a
 grid-based or graph-diffusion Finsler distance is ever needed again,
 that's `FinslerAffinity`'s `graph.py` / `operators.py` / `fbfs.py` /
@@ -157,7 +179,8 @@ itself, so a custom flow only needs to output a raw, unconstrained vector.
   dense vs KeOps correctness, scaling vs n, optional full fit; writes JSON to
   `benchmarks/results/`) and `RESULTS.md` (runs so far).
 - `tests/` — `test_backends.py`: dense vs KeOps equivalence, sparse
-  affinities, log-domain Sinkhorn vs the previous implementation, float32.
+  affinities, log-domain Sinkhorn vs the previous implementation, float32;
+  `test_potential.py`: the exact potential mode.
   Run with `conda run -n dev python -m pytest tests/ -q`.
 - `article/draft/` — working status document (`draft.md`) and its figures.
 

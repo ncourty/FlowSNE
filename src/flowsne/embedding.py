@@ -38,7 +38,7 @@ class JointAffinityMatcher(AffinityMatcher):
 def fit_embedding(affinity_out, P, init, indices=None, max_iter: int = 1500, lr: float = 0.1,
                   init_scaling: float = 1.0, seed: int = 0, train_embedding: bool = True,
                   train_flow: bool = True, rescale_init: bool = True, anchor=None,
-                  anchor_weight: float = 0.0):
+                  anchor_weight: float = 0.0, history: list | None = None, log_every: int = 100):
     """Fit an embedding (and/or ``affinity_out``'s flow) by Adam on
     ``affinity_out.cross_entropy(Z, P, indices)`` -- dense ``P`` (n, n) or
     sparse ``P`` (n, k) + ``indices`` (``EntropicRandersAffinity(sparsity=
@@ -60,6 +60,9 @@ def fit_embedding(affinity_out, P, init, indices=None, max_iter: int = 1500, lr:
     coherence term ``anchor_weight * mean_i ||z_i - anchor_i||^2`` (Rauber et
     al. 2016) to the loss. The flow is warm-started simply by passing the
     same ``affinity_out`` again.
+
+    ``history``: a list to which ``(iteration, loss)`` is appended every
+    ``log_every`` iterations and after the last one (loss before that step).
     """
     torch.manual_seed(seed)
     Z = torch.as_tensor(init).to(dtype=P.dtype, device=P.device).detach().clone()
@@ -78,9 +81,11 @@ def fit_embedding(affinity_out, P, init, indices=None, max_iter: int = 1500, lr:
     if not groups:
         raise ValueError("fit_embedding: nothing to train.")
     opt = torch.optim.Adam(groups, lr=lr)
-    for _ in range(max_iter):
+    for it in range(max_iter):
         opt.zero_grad(set_to_none=True)
         loss = affinity_out.cross_entropy(Z, P, indices)
+        if history is not None and (it % log_every == 0 or it == max_iter - 1):
+            history.append((it, float(loss.detach())))
         if anchor is not None and anchor_weight:
             loss = loss + anchor_weight * ((Z - anchor) ** 2).sum(-1).mean()
         loss.backward()

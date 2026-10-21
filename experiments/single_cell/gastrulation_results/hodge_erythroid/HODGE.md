@@ -30,12 +30,12 @@ Edge flow f_ij = ½(v_i + v_j)·(x_j − x_i) on the symmetrised kNN graph in 30
 | scvelo_T_centred | gradient | +0.008 | +0.028 | +0.028 |
 | scvelo_T_centred | rest | +0.002 | +0.021 | +0.066 |
 
-## Gradient share on edges inside each cell type
+## Gradient share within each cell type (its own subgraph, decomposed separately)
 
 | cell type | direct | scvelo_T | direct_centred | scvelo_T_centred |
 |---|---|---|---|---|
-| Blood progenitors 2 | 0.94 | 0.73 | 0.81 | 0.74 |
-| Erythroid3 | 0.93 | 0.83 | 0.75 | 0.76 |
-| Blood progenitors 1 | 0.91 | 0.64 | 0.82 | 0.66 |
-| Erythroid1 | 0.91 | 0.35 | 0.73 | 0.36 |
-| Erythroid2 | 0.85 | 0.57 | 0.63 | 0.50 |
+| Blood progenitors 1 | 0.96 | 0.72 | 0.91 | 0.74 |
+| Blood progenitors 2 | 0.93 | 0.74 | 0.78 | 0.73 |
+| Erythroid3 | 0.92 | 0.77 | 0.75 | 0.68 |
+| Erythroid2 | 0.91 | 0.77 | 0.73 | 0.74 |
+| Erythroid1 | 0.90 | 0.63 | 0.75 | 0.64 |

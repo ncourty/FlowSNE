@@ -57,11 +57,11 @@
     "s25": 0.05417230338189006
    },
    "gradient_share_by_celltype": {
-    "Blood progenitors 1": 0.9111332343573082,
-    "Blood progenitors 2": 0.9395014536574724,
-    "Erythroid1": 0.9057857540184243,
-    "Erythroid2": 0.8452831362554268,
-    "Erythroid3": 0.9280808839234322
+    "Blood progenitors 1": 0.964990432510025,
+    "Blood progenitors 2": 0.9282684636199601,
+    "Erythroid1": 0.8991480996932757,
+    "Erythroid2": 0.9113744901548485,
+    "Erythroid3": 0.9246036931349473
    }
   },
   "scvelo_T": {
@@ -107,11 +107,11 @@
     "s25": 0.0048798448779832
    },
    "gradient_share_by_celltype": {
-    "Blood progenitors 1": 0.637490104691583,
-    "Blood progenitors 2": 0.7273631395898682,
-    "Erythroid1": 0.35101017050185185,
-    "Erythroid2": 0.5713488420733375,
-    "Erythroid3": 0.8311192866694906
+    "Blood progenitors 1": 0.7192664291685861,
+    "Blood progenitors 2": 0.7362483979784736,
+    "Erythroid1": 0.632389947086031,
+    "Erythroid2": 0.7706740998151052,
+    "Erythroid3": 0.7726902612809742
    }
   },
   "direct_centred": {
@@ -157,11 +157,11 @@
     "s25": 0.14677828471924922
    },
    "gradient_share_by_celltype": {
-    "Blood progenitors 1": 0.8155610160906366,
-    "Blood progenitors 2": 0.8052723766399495,
-    "Erythroid1": 0.7293506467098448,
-    "Erythroid2": 0.6303088157284378,
-    "Erythroid3": 0.7454018898462225
+    "Blood progenitors 1": 0.9104162704961257,
+    "Blood progenitors 2": 0.7844212401263171,
+    "Erythroid1": 0.7502983307986298,
+    "Erythroid2": 0.731162180554426,
+    "Erythroid3": 0.7497471082476375
    }
   },
   "scvelo_T_centred": {
@@ -207,11 +207,11 @@
     "s25": 0.00675920590232841
    },
    "gradient_share_by_celltype": {
-    "Blood progenitors 1": 0.6631939753630252,
-    "Blood progenitors 2": 0.7394506406259401,
-    "Erythroid1": 0.35783239813341194,
-    "Erythroid2": 0.49874214466784933,
-    "Erythroid3": 0.760072195864382
+    "Blood progenitors 1": 0.7397385666780665,
+    "Blood progenitors 2": 0.7345466598356021,
+    "Erythroid1": 0.6407544559646956,
+    "Erythroid2": 0.7442367284138608,
+    "Erythroid3": 0.68055334220615
    }
   }
  }

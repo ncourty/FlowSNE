@@ -26,6 +26,17 @@ Three architectures are provided:
   bias, useful when the true drift field varies quickly with position
   (e.g. a rotational field), at the cost of being more sensitive to the
   ``sigma`` bandwidth matching the data's own scale.
+
+For a gradient drift (``RandersAffinity(drift_mode="potential")``) the
+network is a scalar potential instead: ``potential_flow`` maps
+(n, n_components) -> (n, 1) and is 1-Lipschitz by construction (every
+linear layer's spectral norm clipped to <= 1, 1-Lipschitz activations), which
+is the admissibility condition for the exact distance
+||z_j - z_i|| + h(z_j) - h(z_i). Its last layer is zero-initialised too.
+``FixedPotential`` is the non-parametric alternative: a given per-point
+potential (e.g. the input one -- a scalar per point needs no translation
+from the data space to the embedding) times one learned scale; admissibility
+then constrains the layout instead (pairs with |c dpsi| > ||dz|| get distance 0).
 """
 
 from __future__ import annotations
@@ -122,3 +133,53 @@ class ConstantFlow(nn.Module):
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
         return self.raw.expand(z.shape[0], -1)
+
+
+class LipschitzLinear(nn.Linear):
+    """``nn.Linear`` whose weight is divided by ``max(1, ||W||_2)`` (exact
+    spectral norm) in the forward pass: 1-Lipschitz, and unlike
+    ``torch.nn.utils.spectral_norm`` it allows a zero weight (no 0/0)."""
+
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        sigma = torch.linalg.matrix_norm(self.weight, ord=2)
+        return nn.functional.linear(z, self.weight / sigma.clamp_min(1.0), self.bias)
+
+
+def potential_flow(n_components: int, hidden_dim: int = 64, n_hidden_layers: int = 2) -> nn.Module:
+    """Scalar potential network, 1-Lipschitz in z: spectrally clipped linear
+    layers with Tanh, zero-initialised last layer (h == 0 at start). Takes
+    raw z (no input rescaling: that would change the Lipschitz constant)."""
+    dims = [n_components] + [hidden_dim] * n_hidden_layers
+    layers = []
+    for d_in, d_out in zip(dims[:-1], dims[1:]):
+        layers += [LipschitzLinear(d_in, d_out), nn.Tanh()]
+    last = LipschitzLinear(dims[-1], 1)
+    nn.init.zeros_(last.weight)
+    nn.init.zeros_(last.bias)
+    layers.append(last)
+    return nn.Sequential(*layers)
+
+
+class FixedPotential(nn.Module):
+    """A given per-point potential times a scale: ``h_i = scale * psi_i``,
+    ``scale`` learned (``learn_scale=True``, default) and initialised at
+    ``init_scale`` (default 0: the symmetric kernel at start). ``forward(z)``
+    ignores z's values: row i of z must be point i (as in an embedding fit),
+    so the potential is only defined at the points -- interpolate per-point
+    values to draw it -- and ``RandersAffinity.omega_at`` is meaningless (0).
+    Not Lipschitz by construction: see the module docstring."""
+
+    def __init__(self, psi: torch.Tensor, learn_scale: bool = True, init_scale: float = 0.0):
+        super().__init__()
+        self.register_buffer("psi", torch.as_tensor(psi).reshape(-1).clone())
+        scale = torch.tensor(float(init_scale), dtype=self.psi.dtype)
+        if learn_scale:
+            self.scale = nn.Parameter(scale)
+        else:
+            self.register_buffer("scale", scale)
+
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        if z.shape[0] != self.psi.shape[0]:
+            raise ValueError(f"FixedPotential: {z.shape[0]} rows, but the potential has "
+                             f"{self.psi.shape[0]} points (row i must be point i).")
+        return (self.scale * self.psi).to(z.dtype).unsqueeze(-1)
