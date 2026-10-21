@@ -31,7 +31,10 @@ nearest cells IN THAT REPRESENTATION, weighted by exp(10 cos(f_i, z_j - z_i))
 own direction-blind control (same neighbours, uniform weights); scores are
 days gained relative to that control, so density effects cancel within each
 representation. FlowSNE's native chain (its fitted Randers kernel) is
-reported too, against the same control.
+reported too, against the same control, and so is FlowSNE's layout with the
+raw velocity projected onto it like for sym<d> (``_proj``), plus the input
+affinity itself (``input_randers``, truncated to k, against the symmetric
+input affinity truncated likewise): where the direction is lost, if it is.
 
 Scores: embryonic days gained after s steps (s in --steps) relative to the
 control, on all cells and on winnable cell types (direct velocity forward
@@ -63,7 +66,8 @@ sys.path.insert(0, HERE)
 from flowsne import EntropicRandersAffinity, RandersAffinity, fit_embedding  # noqa: E402
 from flowsne.flows import input_std_norm_flow, mlp_flow  # noqa: E402
 from gastrulation_data import load  # noqa: E402
-from gastrulation_markov import advances, normalise, output_chain, velocity_forward  # noqa: E402
+from gastrulation_markov import (advances, chain_from_rows, normalise, output_chain,  # noqa: E402
+                                 truncate_rows, velocity_forward)  # noqa: E402
 
 SCALE = 10.0           # softmax scale of the cosine kernel (scVelo's form)
 
@@ -181,6 +185,10 @@ def main():
     P, idx = EntropicRandersAffinity(omega=Vt, **kw)(Xt)
     P0, idx0 = EntropicRandersAffinity(omega=None, **kw)(Xt)
     print(f"  input affinities ({idx.shape[1]} neighbours per row)  ({time.time() - t0:.0f}s)", flush=True)
+    Pc = chain_from_rows(P.cpu().double().numpy(), idx.cpu().numpy(), n)
+    P0c = chain_from_rows(P0.cpu().double().numpy(), idx0.cpu().numpy(), n)
+    for k in a.k_chain:          # where FlowSNE starts from: its input affinity, vs the symmetric one
+        score("input_randers", k, 0, truncate_rows(Pc, k), truncate_rows(P0c, k))
     pcs = np.linalg.svd(X - X.mean(0), full_matrices=False)[2]
 
     def fitted(name, dim, seed, Pm, im, train_flow):
@@ -217,6 +225,8 @@ def main():
                 M0 = chain(Z_np, F, k, directed=False)
                 score(f"flowsne{dim}", k, seed, chain(Z_np, F, k), M0)
                 score(f"flowsne{dim}_native", k, seed, output_chain(aff, Z, k, 1.0, backend), M0)
+                Fp = project_velocity(X, V, Z_np)        # the raw velocity carried along, as for sym
+                score(f"flowsne{dim}_proj", k, seed, chain(Z_np, Fp, k), chain(Z_np, Fp, k, directed=False))
     write_report(out, res)
 
 
