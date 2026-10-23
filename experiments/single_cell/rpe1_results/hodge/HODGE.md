@@ -13,13 +13,13 @@ Shares of ||f||²; null = centred velocities permuted among cells. Phase corr = 
 
 | velocity | part | s=1 | s=5 | s=25 |
 |---|---|---|---|---|
-| direct | raw velocity | +0.0099 | +0.0420 | +0.0268 |
-| direct | full | +0.0053 | +0.0288 | +0.0189 |
-| direct | gradient | -0.0014 | -0.0148 | -0.0289 |
-| direct | curl | +0.0091 | +0.0492 | -0.0164 |
-| direct | harmonic | +0.0091 | +0.0306 | +0.0053 |
-| dynamo_kernel | raw velocity | +0.0338 | +0.1075 | -0.0947 |
-| dynamo_kernel | full | +0.0328 | +0.1300 | -0.0887 |
-| dynamo_kernel | gradient | +0.0290 | +0.0835 | -0.0008 |
-| dynamo_kernel | curl | +0.0234 | +0.1156 | -0.0988 |
-| dynamo_kernel | harmonic | +0.0240 | +0.0638 | +0.0028 |
+| direct | raw velocity | +0.0099 | +0.0442 | +0.1854 |
+| direct | full | +0.0053 | +0.0312 | +0.1287 |
+| direct | gradient | -0.0014 | -0.0166 | -0.0575 |
+| direct | curl | +0.0091 | +0.0544 | +0.2636 |
+| direct | harmonic | +0.0091 | +0.0393 | +0.0502 |
+| dynamo_kernel | raw velocity | +0.0338 | +0.1397 | +0.5263 |
+| dynamo_kernel | full | +0.0328 | +0.1733 | +0.7927 |
+| dynamo_kernel | gradient | +0.0290 | +0.1308 | +0.1946 |
+| dynamo_kernel | curl | +0.0234 | +0.1416 | +0.7419 |
+| dynamo_kernel | harmonic | +0.0240 | +0.0909 | +0.0661 |
