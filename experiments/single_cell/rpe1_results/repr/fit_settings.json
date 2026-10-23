@@ -1,0 +1,7 @@
+{
+ "iters": 2000,
+ "lr": 0.03,
+ "exaggeration": 1.0,
+ "exaggeration_iters": 250,
+ "lr_schedule": "constant"
+}

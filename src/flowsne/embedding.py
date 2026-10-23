@@ -12,6 +12,8 @@ just also hands ``affinity_out``'s parameters (if any) to the optimiser.
 
 from __future__ import annotations
 
+import math
+
 import torch
 
 from torchdr import AffinityMatcher
@@ -38,7 +40,9 @@ class JointAffinityMatcher(AffinityMatcher):
 def fit_embedding(affinity_out, P, init, indices=None, max_iter: int = 1500, lr: float = 0.1,
                   init_scaling: float = 1.0, seed: int = 0, train_embedding: bool = True,
                   train_flow: bool = True, rescale_init: bool = True, anchor=None,
-                  anchor_weight: float = 0.0, history: list | None = None, log_every: int = 100):
+                  anchor_weight: float = 0.0, history: list | None = None, log_every: int = 100,
+                  flow_lr: float | None = None, lr_schedule: str = "constant",
+                  early_exaggeration: float = 1.0, exaggeration_iters: int = 0):
     """Fit an embedding (and/or ``affinity_out``'s flow) by Adam on
     ``affinity_out.cross_entropy(Z, P, indices)`` -- dense ``P`` (n, n) or
     sparse ``P`` (n, k) + ``indices`` (``EntropicRandersAffinity(sparsity=
@@ -61,6 +65,14 @@ def fit_embedding(affinity_out, P, init, indices=None, max_iter: int = 1500, lr:
     al. 2016) to the loss. The flow is warm-started simply by passing the
     same ``affinity_out`` again.
 
+    Optional training schedule (defaults reproduce the plain loop above):
+    ``flow_lr`` gives the flow's parameters their own learning rate (default:
+    ``lr``); ``lr_schedule="cosine"`` decays every group's rate as
+    ``0.5 (1 + cos(pi t / max_iter))`` (floored at 1% of the initial rate);
+    ``early_exaggeration`` multiplies the attraction term for the first
+    ``exaggeration_iters`` iterations (t-SNE's early exaggeration, which
+    mainly shapes the global layout).
+
     ``history``: a list to which ``(iteration, loss)`` is appended every
     ``log_every`` iterations and after the last one (loss before that step).
     """
@@ -77,19 +89,31 @@ def fit_embedding(affinity_out, P, init, indices=None, max_iter: int = 1500, lr:
     if train_flow:
         flow_params = [q for q in affinity_out.parameters() if q.requires_grad]
         if flow_params:
-            groups.append({"params": flow_params})
+            groups.append({"params": flow_params, "lr": lr if flow_lr is None else flow_lr})
     if not groups:
         raise ValueError("fit_embedding: nothing to train.")
     opt = torch.optim.Adam(groups, lr=lr)
+    if lr_schedule == "cosine":
+        sched = torch.optim.lr_scheduler.LambdaLR(
+            opt, lambda t: max(0.01, 0.5 * (1 + math.cos(math.pi * t / max_iter))))
+    elif lr_schedule == "constant":
+        sched = None
+    else:
+        raise ValueError(f"lr_schedule must be 'constant' or 'cosine', got {lr_schedule!r}")
     for it in range(max_iter):
         opt.zero_grad(set_to_none=True)
-        loss = affinity_out.cross_entropy(Z, P, indices)
+        if it < exaggeration_iters and early_exaggeration != 1.0:
+            loss = affinity_out.cross_entropy(Z, P, indices, exaggeration=early_exaggeration)
+        else:
+            loss = affinity_out.cross_entropy(Z, P, indices)
         if history is not None and (it % log_every == 0 or it == max_iter - 1):
             history.append((it, float(loss.detach())))
         if anchor is not None and anchor_weight:
             loss = loss + anchor_weight * ((Z - anchor) ** 2).sum(-1).mean()
         loss.backward()
         opt.step()
+        if sched is not None:
+            sched.step()
     return Z.detach()
 
 

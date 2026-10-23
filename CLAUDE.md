@@ -169,7 +169,9 @@ itself, so a custom flow only needs to output a raw, unconstrained vector.
   Known artefact: sharp ridges where the network switches between
   neighbouring clusters, even where points are present.
 - `experiments/` — `toy/` (synthetic vortex + rotating-sphere), `single_cell/`
-  (pancreas + dentate gyrus RNA velocity), `mnist/` (gradient-as-drift),
+  (pancreas + dentate gyrus RNA velocity; gastrulation vs real stage; RPE1-FUCCI
+  cell cycle, `rpe1_*.py`: labelling velocity from dynamo, FUCCI phase as ground
+  truth, scored by unwrapped phase progress and circulation around the cycle), `mnist/` (gradient-as-drift),
   `flow_matching/` (a pretrained flow-matching model's own velocity field),
   `transformer/` (GPT-2 residual-stream updates as drift). Every script
   here uses only `flowsne`'s public API — no heat-kernel code paths, no
@@ -188,6 +190,14 @@ itself, so a custom flow only needs to output a raw, unconstrained vector.
 
 - Run project code inside the conda env named `dev`
   (`conda run -n dev ...`), same as the sibling projects.
+  Exception: `experiments/single_cell/rpe1_data.py` runs in a separate env
+  `dynamo` (dynamo-release 1.5.3 + statsmodels 0.14.4, Python 3.10), which
+  only exports an .npz for the `dev` scripts.
+- `fit_embedding` options `early_exaggeration`/`exaggeration_iters`,
+  `lr_schedule="cosine"`, `flow_lr` (defaults = the plain loop). On RPE1 at
+  d = 10, early exaggeration (12x, 250 its) is what lets every map keep the
+  cycle's global structure; network architecture (RFF included) and flow
+  learning rate made no difference (`rpe1_diag10.py`).
 - Derive new affinities from TorchDR's `Affinity` hierarchy
   (`torchdr.affinity.base`) and follow its constructor conventions
   (`metric`, `zero_diag`, `device`, `backend`, `verbose`, `compile`,

@@ -598,7 +598,8 @@ class RandersAffinity(NormalizedStudentAffinity):
         return -0.5 * (nu + 1) * (C / nu + 1).log()
 
     def cross_entropy(self, Z: torch.Tensor, P: torch.Tensor,
-                      indices: Optional[torch.Tensor] = None) -> torch.Tensor:
+                      indices: Optional[torch.Tensor] = None,
+                      exaggeration: float = 1.0) -> torch.Tensor:
         r"""Cross-entropy :math:`-\sum_{ij} P_{ij} \log Q_{ij}` against this
         kernel, with ``Q`` normalised over all pairs.
 
@@ -608,6 +609,8 @@ class RandersAffinity(NormalizedStudentAffinity):
         :math:`(\sum P)\,\log Z`, the normaliser over all pairs computed
         densely or lazily (``backend="keops"``) -- never an (n, n) tensor in
         the KeOps case. Exactly equal to the dense loss on the densified P.
+        ``exaggeration`` multiplies the attraction term only (early
+        exaggeration); 1 gives the cross-entropy itself.
         """
         if self.normalization_dim not in ((0, 1), (1, 0)):
             raise NotImplementedError(
@@ -625,6 +628,6 @@ class RandersAffinity(NormalizedStudentAffinity):
                     "[RandersAffinity] a dense P with backend='keops' would need "
                     "the (n, n) kernel; pass a sparse P with its indices."
                 )
-            return -(P * log_kernel).sum() + P.sum() * log_Z
+            return -exaggeration * (P * log_kernel).sum() + P.sum() * log_Z
         d = randers_distance_indexed(Z, omega, indices, mode=self.drift_mode)
-        return -(P * self._log_kernel(d ** 2)).sum() + P.sum() * log_Z
+        return -exaggeration * (P * self._log_kernel(d ** 2)).sum() + P.sum() * log_Z
