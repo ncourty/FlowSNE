@@ -71,6 +71,23 @@ drawing psi's level sets on the symmetric map -- a per-cell scalar needs no
 asymmetric geometry. Whatever FlowSNE adds must come from the non-gradient
 (rotational) part of the drift.
 
+A fourth mode, `drift_mode="stream"` (2-D only), makes the OUTPUT drift
+divergence-free by construction: omega = m J grad h, h a scalar network
+(`scalar_flow`, optional RFF first layer), admissibility either by a
+1-Lipschitz h (`stream_bound="lipschitz"`, too weak a field) or by one global
+factor m / max(1, max_i |grad h_i|) (`"global"`, default; one spike in h
+crushes the field everywhere, fatal with RFF). Outcome (Nov 2026,
+`experiments/toy/stream_sphere.py`, `experiments/mnist/stream_probe.py`):
+DROPPED. Even on the sphere, whose true drift is solenoidal, every stream
+variant loses to the free flow (best: 32x1 stream, ~60% of the free flow's loss
+gain) and folds the layout (extra vortex centres; the free flow alone puts its
+two centres on the poles, `stream_sphere.py poles`); a 64x2 free flow matches
+the 32x1 one, so it is the constraint, not capacity. Reason: div omega = 0 is
+the wrong invariant -- a push-forward under a non-area-preserving map only
+satisfies div(rho_Z omega) = 0, and under balanced inputs the gradient part is a
+first-order gauge freedom, not something that must vanish (a density-weighted
+variant did not help either). Decompose a fitted free flow post hoc instead.
+
 No graph/heat-kernel/eikonal machinery is implemented here. If a
 grid-based or graph-diffusion Finsler distance is ever needed again,
 that's `FinslerAffinity`'s `graph.py` / `operators.py` / `fbfs.py` /

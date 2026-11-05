@@ -1,0 +1,3 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+rpe1 DS flow s1: 866s, loss 14.5444 13.5112 13.4414 13.4094 13.3912 13.3803 13.3724
+

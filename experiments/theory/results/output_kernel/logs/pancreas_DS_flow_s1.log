@@ -1,0 +1,5 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+[KeOps] Warning : OpenMP library not found, it must be downloaded through Homebrew for apple Silicon chips
+[KeOps] Warning : OpenMP support is not available. Disabling OpenMP.
+pancreas DS flow s1: 908s, loss 14.4299 12.5208 12.3890 12.3320 12.3005 12.2816 12.2696
+

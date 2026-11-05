@@ -1,0 +1,4 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+[rs s0] stream_density_joint loss=12.1202 secs=1544.6297 cos_ref=0.8872 cos_ref_median=0.9623 speed_spearman=0.4214 knn=0.7311 div_rms=0.0000 curl_rms=0.3678
+[rs s0] stream_density_driftonly loss=11.9765 secs=647.6507 cos_ref=0.8046 cos_ref_median=0.9792 speed_spearman=0.3689 knn=0.6799 div_rms=0.0000 curl_rms=0.0762
+

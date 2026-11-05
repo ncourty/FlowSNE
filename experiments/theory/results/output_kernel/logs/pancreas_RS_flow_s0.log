@@ -1,0 +1,3 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+pancreas RS flow s0: 966s, loss 14.4346 12.6224 12.4952 12.4437 12.4144 12.3958 12.3845
+

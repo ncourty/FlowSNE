@@ -1,0 +1,3 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+pancreas RS stream_weight s1: 755s, loss 14.4349 12.4904 12.3771 12.3311 12.3085 12.2911 12.2814
+

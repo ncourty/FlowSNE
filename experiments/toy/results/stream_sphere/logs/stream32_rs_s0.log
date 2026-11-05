@@ -1,0 +1,4 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+[rs s0] stream32_joint    loss=11.7932 secs=1024.5631 cos_ref=0.9441 cos_ref_median=0.9924 speed_spearman=0.7256 knn=0.7719 div_rms=0.0000 curl_rms=0.1988
+[rs s0] stream32_driftonly loss=11.9629 secs=454.8826 cos_ref=0.8002 cos_ref_median=0.9695 speed_spearman=0.3667 knn=0.6799 div_rms=0.0000 curl_rms=0.1169
+

@@ -1,0 +1,47 @@
+\begin{table}[t]
+  \caption{Balanced (Sk) versus row-stochastic (RS) Randers affinities
+    built from the same velocity: squared cost, per-row perplexity
+    $\sqrt n$, dense. ``cos'' is the mean cosine between each cell's shift
+    in outgoing displacement, relative to the symmetric affinity, and the
+    gradient or non-gradient Hodge part of the velocity. ``progress'' is
+    the ground-truth progress after $10$ steps of the walk, minus that of
+    the symmetric walk: pseudotime units for pancreas, fractions of a cycle
+    for RPE1. The linear cost gives the same picture.}
+  \label{tab:dsrs}
+  \centering\small
+  \begin{tabular}{@{}llrrr@{}}
+    \toprule
+    data & norm. & cos grad. & cos rest & progress \\
+    \midrule
+    pancreas      & RS & $0.56$ & $0.21$ & $0.167$ \\
+                  & Sk & $0.38$ & $0.26$ & $0.000$ \\
+    \addlinespace
+    RPE1, direct  & RS & $0.56$ & $0.14$ & $0.060$ \\
+                  & Sk & $0.01$ & $0.33$ & $0.082$ \\
+    \addlinespace
+    RPE1, kernel  & RS & $0.34$ & $0.36$ & $0.311$ \\
+                  & Sk & $0.12$ & $0.37$ & $0.241$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Three observations follow the theory.
+\begin{itemize}
+  \item \textbf{No net progress along a potential.} On pancreas, the
+    balanced walk's mean pseudotime gain is zero to numerical precision,
+    as \cref{prop:netflow} requires. The row-stochastic walk gains steadily.
+  \item \textbf{Circulation survives balancing.} On RPE1, the balanced walk
+    keeps the progress around the cycle. With the direct velocity it
+    progresses further than the row-stochastic walk, whose extra
+    sensitivity to the gradient part pushes it backwards in phase.
+  \item \textbf{The balanced shift drops the gradient part.} On RPE1 its
+    correlation with the gradient part falls to about zero for the direct
+    velocity, while its correlation with the remainder rises. On pancreas
+    the balanced shift still has a sizeable gradient correlation. This is
+    the first-order leak of per-row bandwidths (\cref{cor:leak}). By
+    \cref{prop:netflow} it must be compensated, and it is: per pseudotime
+    decile, the balanced chain moves cells forward in the first seven and
+    backwards in the last three. Its largest step, $-0.076$, is in the
+    terminal decile. The row-stochastic chain moves forward in every
+    decile.
+\end{itemize}

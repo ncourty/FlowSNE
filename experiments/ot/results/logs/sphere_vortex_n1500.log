@@ -1,0 +1,30 @@
+[TorchDR] JointAffinityMatcher: Random seed set to: 0.
+[TorchDR] JointAffinityMatcher: ----- Using precomputed affinity matrix -----
+[TorchDR] JointAffinityMatcher: ----- Optimizing the embedding -----
+[TorchDR] JointAffinityMatcher: [0/3000] Loss: 1.37e+01 | Grad norm: nan | LR: 3.00e-02
+[TorchDR] JointAffinityMatcher: [250/3000] Loss: 1.23e+01 | Grad norm: 1.39e-02 | LR: 3.00e-02
+[TorchDR] JointAffinityMatcher: [500/3000] Loss: 1.20e+01 | Grad norm: 3.29e-03 | LR: 3.00e-02
+[TorchDR] JointAffinityMatcher: [750/3000] Loss: 1.18e+01 | Grad norm: 1.92e-03 | LR: 3.00e-02
+[TorchDR] JointAffinityMatcher: [1000/3000] Loss: 1.17e+01 | Grad norm: 1.22e-03 | LR: 3.00e-02
+[TorchDR] JointAffinityMatcher: [1250/3000] Loss: 1.17e+01 | Grad norm: 8.99e-04 | LR: 3.00e-02
+[TorchDR] JointAffinityMatcher: [1500/3000] Loss: 1.16e+01 | Grad norm: 7.49e-04 | LR: 3.00e-02
+[TorchDR] JointAffinityMatcher: [1750/3000] Loss: 1.16e+01 | Grad norm: 5.68e-04 | LR: 3.00e-02
+[TorchDR] JointAffinityMatcher: [2000/3000] Loss: 1.16e+01 | Grad norm: 4.59e-04 | LR: 3.00e-02
+[TorchDR] JointAffinityMatcher: [2250/3000] Loss: 1.16e+01 | Grad norm: 3.81e-04 | LR: 3.00e-02
+[TorchDR] JointAffinityMatcher: [2500/3000] Loss: 1.15e+01 | Grad norm: 3.49e-04 | LR: 3.00e-02
+[TorchDR] JointAffinityMatcher: [2750/3000] Loss: 1.15e+01 | Grad norm: 2.72e-04 | LR: 3.00e-02
+[TorchDR] JointAffinityMatcher: Random seed set to: 0.
+[TorchDR] JointAffinityMatcher: ----- Using precomputed affinity matrix -----
+[TorchDR] JointAffinityMatcher: ----- Optimizing the embedding -----
+[TorchDR] JointAffinityMatcher: [0/2000] Loss: 1.37e+01 | Grad norm: nan | LR: 1.00e-01
+[TorchDR] JointAffinityMatcher: [250/2000] Loss: 1.19e+01 | Grad norm: 1.39e-02 | LR: 1.00e-01
+[TorchDR] JointAffinityMatcher: [500/2000] Loss: 1.18e+01 | Grad norm: 4.47e-03 | LR: 1.00e-01
+[TorchDR] JointAffinityMatcher: [750/2000] Loss: 1.17e+01 | Grad norm: 3.24e-03 | LR: 1.00e-01
+[TorchDR] JointAffinityMatcher: [1000/2000] Loss: 1.17e+01 | Grad norm: 3.12e-03 | LR: 1.00e-01
+[TorchDR] JointAffinityMatcher: [1250/2000] Loss: 1.17e+01 | Grad norm: 5.15e-03 | LR: 1.00e-01
+[TorchDR] JointAffinityMatcher: [1500/2000] Loss: 1.16e+01 | Grad norm: 2.87e-03 | LR: 1.00e-01
+[TorchDR] JointAffinityMatcher: [1750/2000] Loss: 1.16e+01 | Grad norm: 5.00e-03 | LR: 1.00e-01
+losses: {'symmetric': 12.1746, 'global': 11.9551, 'neural': 11.5179, 'rff': 11.6199}
+corr(||fitted field||, true speed) [neural] = +0.946
+corr(||fitted field||, true speed) [rff] = +0.652
+saved /Users/nico/code/FlowSNE/experiments/toy/sphere_vortex.png

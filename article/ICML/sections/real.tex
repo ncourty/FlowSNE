@@ -1,0 +1,56 @@
+The theory predicts when a balanced affinity helps. What matters is how a
+velocity field splits into a gradient part and a circulating part. We
+decompose the edge flow $f_{ij}=\tfrac12(v_i+v_j)^\top(x_j-x_i)$ on a
+30-nearest-neighbour graph in 30 principal components, following
+\citet{jiang2011statistical}. The null model permutes the centred
+velocities among cells.
+
+\begin{table}[t]
+  \caption{Hodge content of real RNA-velocity fields: share of
+    $\|f\|^2$ carried by the gradient part, its permutation null, and the
+    part that carries the ground-truth progress. Gastrulation:
+    $n=30{,}000$ cells, E6.5--E8.5 \citep{pijuansala2019single}. RPE1:
+    $n=2{,}793$ cells with FUCCI phase \citep{battich2020sequencing}, velocity
+    from dynamo \citep{qiu2022mapping}.}
+  \label{tab:hodge}
+  \centering\small
+  \begin{tabular}{@{}lccl@{}}
+    \toprule
+    velocity & gradient & null & progress carried by \\
+    \midrule
+    gastrulation, direct     & 0.93 & 0.33 & gradient \\
+    gastrulation, scVelo     & 0.78 & 0.31 & gradient \\
+    RPE1, direct             & 0.67 & 0.21 & non-gradient \\
+    RPE1, dynamo kernel      & 0.29 & 0.24 & mostly non-gradient \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\Cref{tab:hodge} shows two opposite regimes.
+\begin{itemize}
+  \item \textbf{Developmental trajectories are gradient-dominated.} On
+    gastrulation, a walk along the gradient part alone recovers the whole
+    forward-in-time signal. The remainder carries none of it. A large share
+    of the velocity is also a vector common to all cells, which
+    \cref{cor:gauge} makes invisible to any balanced affinity.
+  \item \textbf{The cell cycle circulates.} On RPE1, the gradient part of
+    the direct velocity makes walks go slightly \emph{backwards} in phase.
+    The non-gradient part carries the progress around the cycle; for the
+    kernel velocity it carries most of it over long walks. The
+    velocity circulates around closed loops through the phase bins far
+    above the null ($z$ between $5$ and $18$).
+\end{itemize}
+
+\paragraph{Balanced versus row-stochastic affinities.}
+\Cref{tab:dsrs} builds both affinities from the same velocity, with the
+per-row perplexity calibration of practical neighbour embeddings.
+\input{sections/dsrs_table}
+
+\paragraph{Consequence for embeddings.}
+These numbers explain an observation from fitting Randers neighbour
+embeddings on pancreas \citep{bastidasponce2019comprehensive}. With a
+row-stochastic input affinity, the fitted flow agreed with the true
+velocity at cosine $0.80$ and with scVelo's projection at $0.76$. With a
+balanced one, these fell to $0.69$ and $0.54$. The balanced direction was
+attenuated rather than erased, as \cref{cor:leak} predicts: per-row
+bandwidths and the squared cost leak part of the gradient drift back.

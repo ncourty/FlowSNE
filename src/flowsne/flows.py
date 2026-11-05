@@ -145,15 +145,64 @@ class LipschitzLinear(nn.Linear):
         return nn.functional.linear(z, self.weight / sigma.clamp_min(1.0), self.bias)
 
 
-def potential_flow(n_components: int, hidden_dim: int = 64, n_hidden_layers: int = 2) -> nn.Module:
+class ScaleEquivariant(nn.Module):
+    """Wraps a scalar network g as ``h(z) = s * g((z - mu) / s)``, with ``mu``
+    and ``s`` the current mean and global std of z, detached (as in
+    ``InputStdNorm``). Scaling input and output by the same s keeps the
+    Lipschitz constant of g, so a 1-Lipschitz g gives a 1-Lipschitz h -- but
+    the RANGE of h now grows with the embedding's size. A plain 1-Lipschitz
+    Tanh network has a bounded range (about 2 sqrt(hidden_dim)) whatever the
+    scale of z, which caps the circulation a stream function can carry
+    across a large embedding. Note: s and mu come from the rows passed in,
+    so evaluate on the whole embedding."""
+
+    def __init__(self, g: nn.Module):
+        super().__init__()
+        self.g = g
+
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        zd = z.detach()
+        mu, s = zd.mean(0), zd.std().clamp_min(1e-6)
+        return s * self.g((z - mu) / s)
+
+
+def potential_flow(n_components: int, hidden_dim: int = 64, n_hidden_layers: int = 2,
+                   scale_equivariant: bool = False) -> nn.Module:
     """Scalar potential network, 1-Lipschitz in z: spectrally clipped linear
     layers with Tanh, zero-initialised last layer (h == 0 at start). Takes
-    raw z (no input rescaling: that would change the Lipschitz constant)."""
+    raw z by default; ``scale_equivariant=True`` wraps it in
+    ``ScaleEquivariant`` (still 1-Lipschitz, range proportional to the
+    embedding's std -- the default for ``RandersAffinity(drift_mode="stream")``)."""
     dims = [n_components] + [hidden_dim] * n_hidden_layers
     layers = []
     for d_in, d_out in zip(dims[:-1], dims[1:]):
         layers += [LipschitzLinear(d_in, d_out), nn.Tanh()]
     last = LipschitzLinear(dims[-1], 1)
+    nn.init.zeros_(last.weight)
+    nn.init.zeros_(last.bias)
+    layers.append(last)
+    net = nn.Sequential(*layers)
+    return ScaleEquivariant(net) if scale_equivariant else net
+
+
+def scalar_flow(n_components: int, hidden_dim: int = 64, n_hidden_layers: int = 2,
+                n_fourier: int = 0, sigma: float = 0.3, seed: int = 0) -> nn.Module:
+    """Unconstrained scalar network (n, n_components) -> (n, 1): InputStdNorm,
+    [RandomFourierFeatures], Tanh MLP, zero-initialised last layer -- the
+    stream function for ``RandersAffinity(drift_mode="stream",
+    stream_bound="global")``, where admissibility comes from one global
+    rescaling instead of a Lipschitz constraint. ``n_fourier > 0`` puts a
+    fixed RFF encoding after the normalisation, so ``sigma`` is in units of
+    z's own std (``sigma`` oscillations per std, scale-free)."""
+    layers = [InputStdNorm()]
+    d0 = n_components
+    if n_fourier > 0:
+        layers.append(RandomFourierFeatures(n_components, n_fourier, sigma=sigma, seed=seed))
+        d0 = 2 * n_fourier
+    dims = [d0] + [hidden_dim] * n_hidden_layers
+    for d_in, d_out in zip(dims[:-1], dims[1:]):
+        layers += [nn.Linear(d_in, d_out), nn.Tanh()]
+    last = nn.Linear(dims[-1], 1)
     nn.init.zeros_(last.weight)
     nn.init.zeros_(last.bias)
     layers.append(last)

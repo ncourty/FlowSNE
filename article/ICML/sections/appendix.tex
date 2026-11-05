@@ -1,0 +1,170 @@
+\section{Computing Randers distances}
+\label{app:randers}
+
+\paragraph{Low dimension: eikonal solvers.}
+For a fixed source $x_0$, $u=d_F(x_0\to\cdot)$ is the viscosity solution
+of the eikonal equation $F^*_x(\nabla u)=1$, $u(x_0)=0$, where
+$F^*_x(p)=\sup_{F_x(v)\le1}p^\top v$ is the dual norm. For a Randers norm
+the dual is again of Randers type, given in closed form by Zermelo's
+navigation \citep{bao2000introduction}. On a grid the equation is solved
+by ordered-upwind methods \citep{sethian2003ordered} or by fast marching
+with adaptive stencils, which handle anisotropic and asymmetric metrics
+\citep{mirebeau2014efficient}. Each solve costs $O(N\log N)$ on $N$ grid
+nodes, and the full cost matrix needs one solve per source, so $n$ solves.
+This is practical in $d=2$ or $3$.
+
+\paragraph{High dimension.}
+A grid with $m$ nodes per axis has $m^d$ nodes, far out of reach for the
+$10$ to $50$ principal components used on single-cell data. Graph
+substitutes replace paths by chains of nearest-neighbour edges, each
+carrying a local Randers length, and run Dijkstra's algorithm on the
+directed graph, as Isomap does for Euclidean geodesics
+\citep{tenenbaum2000global}. Heat-kernel proxies replace the infimum by a
+small-time limit of a diffusion. Both converge only as the sampling
+densifies around the optimal paths, which in high dimension takes
+exponentially many points, and both are biased toward paths through
+dense regions.
+
+\paragraph{The drift is only sampled.}
+A velocity is estimated at each point $x_i$ and nowhere else. The
+infimum ranges over paths through regions where nothing is measured, so
+the value of $d_F$ depends on how $\omega$ is extended between samples,
+by interpolation or by a fitted network. That is a modelling choice the
+data do not support.
+
+\paragraph{Error of the closed forms.}
+The straight segment $\gamma(t)=x_i+t\Delta$, $\Delta=x_j-x_i$, gives the
+upper bound
+\[
+  d_F(x_i\to x_j)\le\|\Delta\|+\int_0^1\omega(x_i+t\Delta)^\top\Delta\,dt .
+\]
+Perturb the segment by $\eta(t)$ with $\eta(0)=\eta(1)=0$ and
+$\|\eta\|\le h$. The length grows by order $h^2/r$, with $r=\|\Delta\|$.
+The first variation of the drift term is
+$\int_0^1\eta^\top(\nabla\omega-\nabla\omega^\top)\dot\gamma\,dt$, of
+order $\|\nabla\omega-\nabla\omega^\top\|\,r\,h$; only the curl of
+$\omega$ enters it. Optimising over $h$ gives a gain of order
+$\|\nabla\omega-\nabla\omega^\top\|^2r^3$, which vanishes for gradient
+drifts. The frozen form is the left-endpoint rule for the line integral,
+with error $O(\|\nabla\omega\|r^2)$; the averaged form is the trapezoid
+rule, with error $O(\|\nabla^2\omega\|r^3)$.
+
+\section{Computations omitted from the main text}
+\label{app:computations}
+
+\paragraph{The Laplace--Randers partition function.}
+For $\|\eta\|<1$ we claim $Z_d(\eta)=\int_{\R^d}e^{-\|v\|-\eta^\top v}dv=c_d\,(1-\|\eta\|^2)^{-(d+1)/2}$.
+By rotation invariance $Z_d$ depends on $s=\|\eta\|$ only. In polar
+coordinates, $Z_d(s)=\int_0^\infty r^{d-1}e^{-r}\,\Phi_d(sr)\,dr$, where
+$\Phi_d(t)=\int_{S^{d-1}}e^{-t\theta_1}d\theta$. Three cases check the
+claim directly:
+\begin{itemize}
+  \item $d=1$: $\int e^{-|v|-sv}dv=\frac{1}{1-s}+\frac{1}{1+s}=\frac{2}{1-s^2}$.
+  \item $d=2$: $Z_2=2\pi\int_0^\infty re^{-r}I_0(sr)\,dr=2\pi(1-s^2)^{-3/2}$,
+    the Laplace transform of $rI_0(sr)$ evaluated at $1$.
+  \item $d=3$: $Z_3=\frac{4\pi}{s}\int_0^\infty re^{-r}\sinh(sr)\,dr=8\pi(1-s^2)^{-2}$.
+\end{itemize}
+For general $d$, $\Phi_d(t)=c'_d\,t^{-(d-2)/2}I_{(d-2)/2}(t)$, and the
+Laplace transform of $r^{d/2}I_{(d-2)/2}(sr)$ at $1$ is proportional to
+$s^{(d-2)/2}(1-s^2)^{-(d+1)/2}$. This gives the claim.
+Differentiating \eqref{eq:laplace} in $\zeta$ gives
+$M(\omega,\zeta)=-(d+1)\,\eta/(1-\|\eta\|^2)$ with $\eta=\omega-\zeta$.
+
+\paragraph{The Randers unit ball.}
+$\{v:\|v\|+\omega^\top v\le1\}$ is the set where $\|v\|^2\le(1-\omega^\top v)^2$
+and $\omega^\top v\le1$. For $\|\omega\|<1$ this is an ellipsoid, symmetric
+about the axis $\omega$. Along that axis, $v=t\,\omega/\|\omega\|$ with
+$t\in[-1/(1-\|\omega\|),\,1/(1+\|\omega\|)]$. Its centre is therefore
+$c_F=-\omega/(1-\|\omega\|^2)$. With $\kappa_g=d+1$ for $g=e^{-t}$, this
+agrees with $M(\omega,0)$ above.
+
+\paragraph{Linearisation for the Gaussian profile.}
+For $g(t)=e^{-t^2/2}$,
+$F_\omega(v)^2=\|v\|^2+2\|v\|\,\omega^\top v+(\omega^\top v)^2$. To first
+order in $(\omega,\zeta)$ the tilted density is
+$\mathcal{N}(0,I_d)\cdot\big(1+\zeta^\top v-2\|v\|\,\omega^\top v\big)$.
+Its mean is
+\[
+  \zeta-2\,\E\big[\|v\|\,vv^\top\big]\,\omega=\zeta-\frac{2\,\E\|v\|^3}{d}\,\omega .
+\]
+So $s_0=2\E\|v\|^3/d$; in $d=2$, $\E\|v\|^3=3\sqrt{\pi/2}$ and
+$s_0\approx3.76$. The map $(\omega,\zeta)\mapsto M$ is odd, so the next
+term is cubic.
+
+\paragraph{Per-row bandwidths in the discrete prediction.}
+\Cref{sec:exp} compares measured transport with \cref{cor:leak}(2). It uses
+the discrete form of that statement. With kernel $\exp(-\beta_iC_{ij})$ and
+$\beta(x)=1/(h\sigma(x))$, the predicted mean displacement is
+$-(d+1)\,u/\beta^2$. Here $u=\beta\omega-\nabla\Psi$ is the solenoidal
+part of $\beta\omega$ in $L^2(p/\beta^2)$. We compute it by finite volumes
+on a $128\times128$ periodic grid, after smoothing $1/\beta_i$ onto the
+grid with a Gaussian of width $0.04$.
+
+\section{Experimental protocol}
+\label{app:protocol}
+
+All experiments run in float64 with log-domain Sinkhorn, stopped when every
+row sum is within $10^{-11}$ relative error. Code:
+\texttt{experiments/theory/gauge\_checks.py}.
+
+\paragraph{Finite-sample identities.}
+$n=400$ Gaussian points in $\R^5$, $\eps=0.3$, Euclidean $S$. The gradient
+part uses $\phi=0.2(\tanh x_1+0.3x_2^2)$; the generic antisymmetric part is
+a random Gaussian matrix, antisymmetrised, of scale $0.1$.
+
+\paragraph{Torus.}
+Points are sampled on $\T^2$ by rejection from
+$p(x)\propto1+0.6\cos(2\pi x_1)\cos(2\pi(x_2-0.15))+0.25\sin(2\pi(x_1+x_2))$.
+\begin{itemize}
+  \item Gradient part: $\phi=\big(\sin 2\pi x_1+\tfrac12\sin 2\pi(x_2+0.2)\big)/2\pi$.
+  \item Solenoidal part: $w=p^{-1}\nabla^\perp\chi$ with
+    $\chi=\sin(2\pi x_1)\sin(2\pi x_2)/2\pi$, so that $\dv(p\,w)=0$ by
+    construction. Hence $\Leray_p(\nabla\phi+w)=w$ exactly.
+\end{itemize}
+Both fields are scaled to maximum norm $1$ and multiplied by $\rho$. The
+cost is the linear Randers cost with the exact potential term and the
+averaged form for $w$:
+$C_{ij}=\|\Delta_{ij}\|+\rho(\phi_j-\phi_i)+\rho\,\bar w_{ij}^\top\Delta_{ij}$,
+with torus displacements. The transport field is
+$b_i=h^{-1}\sum_jP_{ij}\Delta_{ij}/\sum_jP_{ij}$. The same quantity for
+the drift-free kernel is subtracted, to remove the $O(h)$ density term.
+Per-row bandwidths are calibrated by bisection to perplexity $30$.
+
+\section{Proof sketch of \cref{thm:continuum}}
+\label{app:continuum}
+
+\begin{proof}[Proof sketch of \cref{thm:continuum}]
+  \emph{Step 1: local profile.} Substitute $y=x+h\sigma(x)v$. Then
+  $v_h(y)/v_h(x)=\exp\!\big(\sigma\nabla\Psi(x)^\top v+O(h\|v\|^2+h\|v\|)\big)$
+  and $p(y)/p(x)=1+O(h\|v\|)$. So the law of $v$ under $T_h(x,\cdot)$
+  converges to the normalised density
+  $g(F_{\omega(x)}(v))\,e^{\sigma\nabla\Psi^\top v}$. Its mean is
+  $M(\omega,\sigma\nabla\Psi)$, and the displacement is $h\sigma v$, which
+  gives \eqref{eq:b}. Tails are controlled because the tilt stays inside
+  the domain of $\Lambda$.
+
+  \emph{Step 2: stationarity.} For $f\in C^2$, stationarity of $p$ gives
+  $\int p(x)\int\big(f(y)-f(x)\big)T_h(x,dy)\,dx=0$. A Taylor expansion
+  turns this into $h\int p\,b_h^\top\nabla f+O(h^2)=0$. Hence
+  $\int p\,b^\top\nabla f=0$ for all $f$, i.e.\ $\dv(p\,b)=0$.
+
+  \emph{Step 3: variational form.} The first variation of \eqref{eq:J} is
+  $\delta J=\int p\,\sigma\,\nabla_\zeta\Lambda^\top\nabla\delta\Psi
+  =-\int\dv(p\,b)\,\delta\Psi$. So Step 2 is the Euler--Lagrange equation
+  of $J$. Strict convexity of $\Lambda$ in $\zeta$ makes the critical
+  point unique up to constants.
+
+  \emph{Row-stochastic case.} There is no tilt, so the mean is $M(\omega,0)$.
+  Write $g(F)=\int_0^\infty|g'(t)|\,\1\{F\le t\}\,dt$ and use the
+  1-homogeneity of $F$: $\int v\,\1\{F(v)\le t\}\,dv=t^{d+1}\!\int_{\{F\le1\}}v\,dv$.
+  The ratio of the first moment to the mass gives $\kappa_g c_F$.
+\end{proof}
+
+\begin{proof}[Proof of \cref{cor:laplace}]
+  (1) The integrand $-\log(1-t^2)$ is non-negative and vanishes only at
+  $t=0$. If $\omega=\nabla\phi$, then $\Psi=\phi$ attains the minimum
+  value $0$ and $b=0$. Conversely, $b=0$ forces $\omega=\nabla\Psi$.
+  (2) Since $-\log(1-t^2)=t^2+O(t^4)$, $\Psi$ minimises
+  $\int p\,\|\omega-\nabla\Psi\|^2$ to leading order, which is the weighted
+  $L^2$ projection onto gradients.
+\end{proof}

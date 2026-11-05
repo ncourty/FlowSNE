@@ -1,0 +1,10 @@
+[pancreas s0] theirs_isomap            cos_ref=0.808 cos_ref_median=0.963 speed_spearman=0.629 knn=0.292 cos_scvelo=0.689 pt_align=0.318 scvelo_vs_ref=0.960  (0s)
+[pancreas s0] theirs_eig               cos_ref=0.653 cos_ref_median=0.963 speed_spearman=0.797 knn=0.260 cos_scvelo=0.570 pt_align=0.178 scvelo_vs_ref=0.847  (0s)
+[pancreas s0] theirs_on_flowsne        cos_ref=0.883 cos_ref_median=0.977 speed_spearman=0.500 knn=0.532 cos_scvelo=0.784 pt_align=0.344 scvelo_vs_ref=0.959  (0s)
+[pancreas s0] flowsne_ds_joint         cos_ref=0.701 cos_ref_median=0.960 speed_spearman=0.646 knn=0.523 cos_scvelo=0.551 pt_align=0.347 scvelo_vs_ref=0.965 loss=11.215  (297s)
+[pancreas s0] flowsne_ds_driftonly     cos_ref=0.740 cos_ref_median=0.954 speed_spearman=0.555 knn=0.532 cos_scvelo=0.600 pt_align=0.352 scvelo_vs_ref=0.959 loss=11.239  (128s)
+[pancreas s0] flowsne_ds_on_isomap     cos_ref=0.632 cos_ref_median=0.942 speed_spearman=0.752 knn=0.292 cos_scvelo=0.513 pt_align=0.382 scvelo_vs_ref=0.960  (129s)
+[pancreas s0] flowsne_rs_joint         cos_ref=0.799 cos_ref_median=0.952 speed_spearman=0.781 knn=0.505 cos_scvelo=0.764 pt_align=0.343 scvelo_vs_ref=0.948 loss=11.273  (308s)
+[pancreas s0] flowsne_rs_driftonly     cos_ref=0.720 cos_ref_median=0.901 speed_spearman=0.490 knn=0.513 cos_scvelo=0.706 pt_align=0.394 scvelo_vs_ref=0.945 loss=11.414  (136s)
+[pancreas s0] flowsne_rs_on_isomap     cos_ref=0.782 cos_ref_median=0.972 speed_spearman=0.768 knn=0.292 cos_scvelo=0.655 pt_align=0.341 scvelo_vs_ref=0.960  (144s)
+

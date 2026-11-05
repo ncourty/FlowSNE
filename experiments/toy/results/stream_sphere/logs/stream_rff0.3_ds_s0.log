@@ -1,0 +1,6 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+[KeOps] Warning : OpenMP library not found, it must be downloaded through Homebrew for apple Silicon chips
+[KeOps] Warning : OpenMP support is not available. Disabling OpenMP.
+[ds s0] stream_rff0.3_joint loss=12.6586 secs=1516.4581 cos_ref=0.1658 cos_ref_median=0.2900 speed_spearman=-0.0494 knn=0.4496 div_rms=0.0000 curl_rms=8.2766
+[ds s0] stream_rff0.3_driftonly loss=12.1292 secs=552.0263 cos_ref=0.0406 cos_ref_median=0.0616 speed_spearman=-0.0901 knn=0.6777 div_rms=0.0000 curl_rms=1.5886
+

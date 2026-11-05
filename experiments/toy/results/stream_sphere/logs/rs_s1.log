@@ -1,0 +1,7 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+[rs s1] sym               loss=12.1334 secs=288.6449 knn=0.6835
+[rs s1] flow_joint        loss=11.6148 secs=1309.6364 cos_ref=0.9364 cos_ref_median=0.9931 speed_spearman=0.7943 knn=0.7890 div_rms=0.1361 curl_rms=0.2462
+[rs s1] flow_driftonly    loss=11.8951 secs=530.1127 cos_ref=0.8092 cos_ref_median=0.9530 speed_spearman=0.3128 knn=0.6835 div_rms=0.1081 curl_rms=0.0814
+[rs s1] stream_joint      loss=11.9571 secs=1510.4822 cos_ref=0.8236 cos_ref_median=0.9924 speed_spearman=0.5408 knn=0.7717 div_rms=0.0000 curl_rms=0.0462
+[rs s1] stream_driftonly  loss=12.0235 secs=517.7797 cos_ref=0.7323 cos_ref_median=0.9665 speed_spearman=0.4177 knn=0.6835 div_rms=0.0000 curl_rms=0.0352
+

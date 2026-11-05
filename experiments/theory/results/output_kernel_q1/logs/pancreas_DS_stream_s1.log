@@ -1,0 +1,3 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+pancreas DS stream s1: 718s, loss 14.4468 12.6277 12.5160 12.4690 12.4426 12.4249 12.4117
+

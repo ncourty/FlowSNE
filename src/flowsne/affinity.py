@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import math
 import warnings
-from typing import Optional, Tuple, Union
+from typing import Literal, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -38,7 +38,7 @@ from .distances import (
     DriftMode, bounded_direction, randers_distance, randers_distance_indexed,
     randers_distance_lazy, randers_distance_pairs, randers_knn, rescale_admissible,
 )
-from .flows import mlp_flow, potential_flow
+from .flows import mlp_flow, potential_flow, scalar_flow
 
 
 def _segment_logsumexp(values: torch.Tensor, segments: torch.Tensor, n: int) -> torch.Tensor:
@@ -457,6 +457,28 @@ class RandersAffinity(NormalizedStudentAffinity):
     the favoured direction is ``-omega_at(Z)``, i.e. down h; ``-h`` is the
     forward landscape.
 
+    ``drift_mode="stream"`` (2-D embeddings only): the drift is
+    divergence-free by construction, omega = J grad(h) with J the +90 degree
+    rotation, i.e. omega = (-dh/dz_2, dh/dz_1), so div omega = 0 exactly for
+    any h. Admissibility cannot come from a pointwise squashing, which would
+    break the zero divergence. ``stream_bound="global"`` (default): h is an
+    unconstrained scalar network (default ``scalar_flow(2)``) and the whole
+    field is rescaled by one factor, omega = max_omega_norm J grad h /
+    max(1, max_i ||grad h(z_i)||) over the rows passed in (evaluate it on the
+    whole embedding); ``stream_bound="lipschitz"``: h = max_omega_norm *
+    flow(z) with a 1-Lipschitz flow (default ``potential_flow(2,
+    scale_equivariant=True)``), so ||omega|| <= max_omega_norm everywhere,
+    not only at the rows (a rotation keeps norms). On the sphere vortex the
+    global bound recovers the direction as well as the free flow; the
+    Lipschitz one gives a weaker field (a 1-Lipschitz Tanh network struggles
+    to keep ||grad h|| near its bound over large regions, which a strong
+    vortex needs). ``stream_function_at`` returns the h with omega = J grad h.
+    The distance is the averaged closed form. Streamlines are the level sets
+    of h and the vorticity is the Laplacian of h. Under a balanced input
+    affinity the loss does not reward the gradient part of the drift to first
+    order (``article/ICML``), so this mode drops a direction the data cannot
+    identify; under a row-stochastic input it loses the gradient channel.
+
     Fit ``(Z, flow.parameters())`` jointly via
     ``flowsne.embedding.JointAffinityMatcher`` -- an ordinary, single-loop
     optimisation (``flow(Z)`` is just an ordinary differentiable function
@@ -471,8 +493,8 @@ class RandersAffinity(NormalizedStudentAffinity):
     flow : nn.Module, optional
         The drift network. Default ``mlp_flow(n_components)`` (a small
         zero-initialised Tanh MLP), or ``potential_flow(n_components)`` with
-        ``drift_mode="potential"``.
-    drift_mode : {"frozen", "averaged", "potential"}, optional
+        ``drift_mode="potential"`` or ``"stream"``.
+    drift_mode : {"frozen", "averaged", "potential", "stream"}, optional
         Default "averaged".
     max_omega_norm : float, optional
         Admissibility bound :math:`\rho` on :math:`\lVert\omega\rVert`.
@@ -492,7 +514,7 @@ class RandersAffinity(NormalizedStudentAffinity):
         self,
         n_components: int,
         flow: Optional[nn.Module] = None,
-        drift_mode: DriftMode = "averaged",
+        drift_mode: Union[DriftMode, Literal["stream"]] = "averaged",
         max_omega_norm: float = 0.95,
         degrees_of_freedom: float = 1.0,
         zero_diag: bool = True,
@@ -502,6 +524,7 @@ class RandersAffinity(NormalizedStudentAffinity):
         verbose: bool = False,
         compile: bool = False,
         _pre_processed: bool = False,
+        stream_bound: Literal["lipschitz", "global"] = "global",
     ):
         if backend not in (None, "keops"):
             raise ValueError(
@@ -518,24 +541,87 @@ class RandersAffinity(NormalizedStudentAffinity):
                 "[RandersAffinity] max_omega_norm must be in (0, 1) (the "
                 f"Randers admissibility bound), got {max_omega_norm}."
             )
+        if drift_mode == "stream" and n_components != 2:
+            raise ValueError(
+                "[RandersAffinity] drift_mode='stream' (omega = J grad h) is 2-D only, "
+                f"got n_components={n_components}."
+            )
+        if stream_bound not in ("lipschitz", "global"):
+            raise ValueError(f"[RandersAffinity] stream_bound must be 'lipschitz' or 'global', "
+                             f"got {stream_bound!r}.")
+        self.stream_bound = stream_bound
         self.n_components = n_components
         self.drift_mode = drift_mode
+        # what the distance functions are called with: the stream mode is a
+        # parametrisation of the drift, its distance is the averaged closed form
+        self._distance_mode = "averaged" if drift_mode == "stream" else drift_mode
         self.max_omega_norm = max_omega_norm
         if flow is None:
-            flow = potential_flow(n_components) if drift_mode == "potential" else mlp_flow(n_components)
+            if drift_mode == "stream" and stream_bound == "global":
+                flow = scalar_flow(n_components)
+            elif drift_mode == "stream":
+                flow = potential_flow(n_components, scale_equivariant=True)
+            elif drift_mode == "potential":
+                flow = potential_flow(n_components)
+            else:
+                flow = mlp_flow(n_components)
         self.flow = flow
+
+    def _scalar(self, Z: torch.Tensor) -> torch.Tensor:
+        return self.max_omega_norm * self.flow(Z).reshape(Z.shape[0])
 
     def potential_at(self, Z: torch.Tensor) -> torch.Tensor:
         """The fitted potential h at every row of ``Z``, shape (n,)
         (``drift_mode="potential"`` only)."""
         if self.drift_mode != "potential":
             raise ValueError("[RandersAffinity] potential_at needs drift_mode='potential'.")
-        return self.max_omega_norm * self.flow(Z).reshape(Z.shape[0])
+        return self._scalar(Z)
+
+    def stream_function_at(self, Z: torch.Tensor) -> torch.Tensor:
+        """The fitted stream function h at every row of ``Z``, shape (n,)
+        (``drift_mode="stream"`` only): omega = J grad h, its level sets are
+        the streamlines."""
+        if self.drift_mode != "stream":
+            raise ValueError("[RandersAffinity] stream_function_at needs drift_mode='stream'.")
+        if self.stream_bound == "lipschitz":
+            return self._scalar(Z)
+        with torch.no_grad():
+            return self.flow(Z).reshape(Z.shape[0]) * self._global_factor(Z)
+
+    def _global_factor(self, Z: torch.Tensor, g: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """max_omega_norm / max(1, max_i ||grad h(z_i)||) (``stream_bound="global"``)."""
+        if g is None:
+            with torch.enable_grad():
+                Zg = Z.detach().requires_grad_(True)
+                g = torch.autograd.grad(self.flow(Zg).sum(), Zg)[0]
+        return self.max_omega_norm / g.norm(dim=1).max().clamp_min(1.0)
+
+    def _stream_field(self, Z: torch.Tensor, detach_scale: bool = False) -> torch.Tensor:
+        """omega = J grad h at the rows of ``Z``, differentiable in the flow's
+        parameters and in ``Z`` (double backward) when grad is enabled;
+        detached otherwise. ``detach_scale``: hold the global factor fixed
+        (``stream_bound="global"``), e.g. to differentiate the field itself."""
+        outer = torch.is_grad_enabled()
+        with torch.enable_grad():
+            Zg = Z if Z.requires_grad else Z.detach().requires_grad_(True)
+            if self.stream_bound == "lipschitz":
+                g = torch.autograd.grad(self._scalar(Zg).sum(), Zg, create_graph=outer)[0]
+            else:
+                g = torch.autograd.grad(self.flow(Zg).sum(), Zg, create_graph=outer)[0]
+                c = self._global_factor(Zg, g)
+                g = g * (c.detach() if detach_scale else c)
+        omega = torch.stack([-g[:, 1], g[:, 0]], dim=1)
+        return omega if outer else omega.detach()
 
     def _field(self, Z: torch.Tensor) -> torch.Tensor:
         """What the distance functions take: the potential (n,) or the
         admissible drift (n, d)."""
-        field = self.potential_at(Z) if self.drift_mode == "potential" else self.omega_at(Z)
+        if self.drift_mode == "potential":
+            field = self.potential_at(Z)
+        elif self.drift_mode == "stream":
+            field = self._stream_field(Z)
+        else:
+            field = self.omega_at(Z)
         return field.to(dtype=Z.dtype, device=Z.device)
 
     def omega_at(self, Z: torch.Tensor) -> torch.Tensor:
@@ -545,8 +631,10 @@ class RandersAffinity(NormalizedStudentAffinity):
         correctly-fit omega points AWAY from the direction the affinity
         favours (moving with omega makes the distance larger, not
         smaller) -- plot ``-omega_at(Z)`` for the "flow direction", not the
-        raw value. With ``drift_mode="potential"``: grad(h) by autograd
-        (detached, also under ``torch.no_grad``)."""
+        raw value. With ``drift_mode="potential"``: grad(h) by autograd;
+        ``"stream"``: J grad(h) (both detached, also under ``torch.no_grad``)."""
+        if self.drift_mode == "stream":
+            return self._stream_field(Z).detach()
         if self.drift_mode == "potential":
             with torch.enable_grad():
                 Zg = Z.detach().requires_grad_(True)
@@ -575,11 +663,11 @@ class RandersAffinity(NormalizedStudentAffinity):
         if self.backend == "keops":
             from torchdr.utils import identity_matrix
 
-            C_F = randers_distance_lazy(Z, omega_field, mode=self.drift_mode) ** 2
+            C_F = randers_distance_lazy(Z, omega_field, mode=self._distance_mode) ** 2
             if self.zero_diag:
                 C_F = C_F + identity_matrix(n, keops=True, device=Z.device, dtype=Z.dtype) * 1e12
             return C_F
-        d_F = randers_distance(Z, omega_field, mode=self.drift_mode)
+        d_F = randers_distance(Z, omega_field, mode=self._distance_mode)
         C_F = d_F ** 2
 
         if self.zero_diag:
@@ -629,5 +717,5 @@ class RandersAffinity(NormalizedStudentAffinity):
                     "the (n, n) kernel; pass a sparse P with its indices."
                 )
             return -exaggeration * (P * log_kernel).sum() + P.sum() * log_Z
-        d = randers_distance_indexed(Z, omega, indices, mode=self.drift_mode)
+        d = randers_distance_indexed(Z, omega, indices, mode=self._distance_mode)
         return -exaggeration * (P * self._log_kernel(d ** 2)).sum() + P.sum() * log_Z

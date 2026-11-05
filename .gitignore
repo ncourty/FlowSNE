@@ -18,3 +18,5 @@ experiments/**/*.gif
 experiments/**/frames.npz
 experiments/**/Z_*.npy
 experiments/**/flow_*.pt
+experiments/**/P_*.npy
+experiments/**/*.lock

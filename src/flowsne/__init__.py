@@ -17,6 +17,8 @@ from .flows import (
     rff_flow,
     LipschitzLinear,
     potential_flow,
+    ScaleEquivariant,
+    scalar_flow,
     FixedPotential,
 )
 from .affinity import EntropicRandersAffinity, RandersAffinity
@@ -39,6 +41,8 @@ __all__ = [
     "rff_flow",
     "LipschitzLinear",
     "potential_flow",
+    "ScaleEquivariant",
+    "scalar_flow",
     "FixedPotential",
     "EntropicRandersAffinity",
     "RandersAffinity",

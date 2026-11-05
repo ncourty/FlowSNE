@@ -1,0 +1,3 @@
+[ds s0] stream32_joint    loss=11.7856 secs=1039.8148 cos_ref=0.9383 cos_ref_median=0.9895 speed_spearman=0.6771 knn=0.7646 div_rms=0.0000 curl_rms=0.2014
+[ds s0] stream32_driftonly loss=11.9513 secs=446.6265 cos_ref=0.8078 cos_ref_median=0.9745 speed_spearman=0.2655 knn=0.6777 div_rms=0.0000 curl_rms=0.1318
+

@@ -1,0 +1,120 @@
+{
+ "args": {
+  "subset": "erythroid",
+  "n_cells": 1500,
+  "dims": [
+   2,
+   10
+  ],
+  "seeds": [
+   0
+  ],
+  "lr": 0.03,
+  "extra": 200,
+  "every": 100,
+  "refit": 200,
+  "perplexity": "auto",
+  "tag": "test"
+ },
+ "n": 1500,
+ "runs": {
+  "flowsne2_s0": {
+   "loss": {
+    "flowsne": 13.17945575856079,
+    "flowsne_layout_omega0": 13.186102885159293,
+    "sym_layout_omega0": 13.18148917513642
+   },
+   "field": {
+    "omega_norm_q10_50_90_max": [
+     0.04286248432245458,
+     0.13025872463766686,
+     0.24875272964218775,
+     0.3136696094991679
+    ],
+    "cos_field_vs_projected_velocity_median": 0.30276802242588796,
+    "cos_positive_fraction": 0.6406666666666667
+   },
+   "walk_score_saved": -0.0012846865476883428,
+   "continue_curve": [
+    12.685178056066713,
+    12.46641073674597
+   ],
+   "continue_walk_score": 0.008823564324542758,
+   "refit": {
+    "1x32": {
+     "loss": 13.176962180694263,
+     "walk_score": -0.06186596800097768,
+     "omega_norm_q10_50_90_max": [
+      0.04139510046548297,
+      0.14708300529876348,
+      0.2990854871005034,
+      0.45175994602039543
+     ],
+     "cos_field_vs_projected_velocity_median": 0.5131591315976669,
+     "cos_positive_fraction": 0.688
+    },
+    "2x128": {
+     "loss": 13.175468929280262,
+     "walk_score": -0.05143729871104706,
+     "omega_norm_q10_50_90_max": [
+      0.06028782784929081,
+      0.17936215336683853,
+      0.35897174508658,
+      0.49437043029336303
+     ],
+     "cos_field_vs_projected_velocity_median": 0.472140887391988,
+     "cos_positive_fraction": 0.648
+    }
+   }
+  },
+  "flowsne10_s0": {
+   "loss": {
+    "flowsne": 12.453846925104886,
+    "flowsne_layout_omega0": 12.721354679204742,
+    "sym_layout_omega0": 12.63672304016648
+   },
+   "field": {
+    "omega_norm_q10_50_90_max": [
+     0.8488412092566339,
+     0.8833484461035968,
+     0.8998376394362099,
+     0.9085289426283044
+    ],
+    "cos_field_vs_projected_velocity_median": 0.5790279960858202,
+    "cos_positive_fraction": 0.9326666666666666
+   },
+   "walk_score_saved": 0.018394277133490365,
+   "continue_curve": [
+    12.022130999114076,
+    11.89893015469081
+   ],
+   "continue_walk_score": 0.022786084526203263,
+   "refit": {
+    "1x32": {
+     "loss": 12.44945294194207,
+     "walk_score": 0.017196072586367964,
+     "omega_norm_q10_50_90_max": [
+      0.8730780441811794,
+      0.8956785044856548,
+      0.9069285394924314,
+      0.9124143763369115
+     ],
+     "cos_field_vs_projected_velocity_median": 0.5758989322072894,
+     "cos_positive_fraction": 0.9266666666666666
+    },
+    "2x128": {
+     "loss": 12.432878305381983,
+     "walk_score": 0.019161146791552737,
+     "omega_norm_q10_50_90_max": [
+      0.9088186979691577,
+      0.9197394290853047,
+      0.9253438168091493,
+      0.9287955462657986
+     ],
+     "cos_field_vs_projected_velocity_median": 0.5819536976474808,
+     "cos_positive_fraction": 0.9233333333333333
+    }
+   }
+  }
+ }
+}

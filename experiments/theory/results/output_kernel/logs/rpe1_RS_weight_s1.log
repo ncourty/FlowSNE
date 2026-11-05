@@ -1,0 +1,3 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+rpe1 RS weight s1: 1032s, loss 14.6654 13.0793 13.0451 13.0311 13.0234 13.0185 13.0152
+

@@ -1,0 +1,3 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+rpe1 DS stream_weight s0: 916s, loss 14.5454 13.4805 13.4081 13.3737 13.3537 13.3415 13.3317
+

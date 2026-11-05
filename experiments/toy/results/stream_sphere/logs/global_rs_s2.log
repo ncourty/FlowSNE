@@ -1,0 +1,3 @@
+[rs s2] stream_global_joint loss=11.7847 secs=1394.1202 cos_ref=0.9552 cos_ref_median=0.9936 speed_spearman=0.7978 knn=0.8083 div_rms=0.0000 curl_rms=0.1448
+[rs s2] stream_global_driftonly loss=12.0264 secs=386.8062 cos_ref=0.7011 cos_ref_median=0.9466 speed_spearman=0.2562 knn=0.6791 div_rms=0.0000 curl_rms=0.1522
+

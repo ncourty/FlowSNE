@@ -1,0 +1,21 @@
+/Users/nico/code/FlowSNE/experiments/mnist/stream_probe.py:101: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /Users/runnerx/miniforge3/conda-bld/libtorch_1767997335193/work/torch/csrc/autograd/generated/python_variable_methods.cpp:837.)
+  r["omega_median"] = float(aff.omega_at(Z).norm(dim=1).median())
+
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+[KeOps] Warning : OpenMP library not found, it must be downloaded through Homebrew for apple Silicon chips
+[KeOps] Warning : OpenMP support is not available. Disabling OpenMP.
+[rs s1] sym                      loss=12.4159 scm_wrong=0.3533 (943s)
+[rs s1] flow_joint_lr0.003       loss=12.3858 scm_wrong=0.3717 (992s)
+[rs s1] flow_joint_lr0.01        loss=12.3829 scm_wrong=0.3737 (865s)
+[rs s1] flow_joint_lr0.03        loss=12.3835 scm_wrong=0.3726 (779s)
+[rs s1] flow_joint_lr0.1         loss=12.3874 scm_wrong=0.3822 (785s)
+[rs s1] flow_joint_lr1           loss=12.4308 scm_wrong=0.3799 (786s)
+[rs s1] flow_driftonly           loss=12.3930 scm_wrong=0.3647 (873s)
+[rs s1] stream_joint_lr0.003     loss=12.4215 scm_wrong=0.3783 (818s)
+[rs s1] stream_joint_lr0.01      loss=12.4368 scm_wrong=0.3613 (814s)
+[rs s1] stream_joint_lr0.03      loss=12.4525 scm_wrong=0.3643 (809s)
+[rs s1] stream_joint_lr0.1       loss=12.5767 scm_wrong=0.3419 (811s)
+[rs s1] stream_joint_lr1         loss=12.4265 scm_wrong=0.3439 (777s)
+[rs s1] stream_driftonly         loss=12.4157 scm_wrong=0.3533 (858s)
+

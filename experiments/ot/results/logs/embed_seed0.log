@@ -1,0 +1,13 @@
+[embed seed=0] coupling: cos(src)=0.998 relerr=0.022 diag mass=0.959
+[embed seed=0] input ds: {'rel_change': 0.11263813544075091, 'asym': 0.2615888891404165, 'asym_sym': 0.27014326283642914, 'align': 0.0879322435825709, 'align_strong': -0.013614839310134602}
+[embed seed=0] ds global: loss=10.9897 beats_sym=True align_partner=0.0380 align_partner_src=0.0380 align_shuffled=0.0160 mean_flow_norm=0.0115 secs=200.1095
+[embed seed=0] ds stdnorm32_joint: loss=11.0196 beats_sym=False align_partner=0.4699 align_partner_src=0.4630 align_shuffled=-0.0016 mean_flow_norm=0.0463 secs=410.3328
+[embed seed=0] ds stdnorm32_driftonly: loss=10.9890 beats_sym=True align_partner=0.5145 align_partner_src=0.5084 align_shuffled=0.0209 mean_flow_norm=0.0441 secs=174.9932
+[embed seed=0] ds gradnet_joint: loss=11.0160 beats_sym=False align_partner=0.2988 align_partner_src=0.3522 align_shuffled=-0.0102 mean_flow_norm=0.0887 secs=407.9764
+[embed seed=0] ds gradnet_driftonly: loss=10.9872 beats_sym=True align_partner=0.3512 align_partner_src=0.3947 align_shuffled=-0.0023 mean_flow_norm=0.0764 secs=157.2700
+[embed seed=0] input rs: {'rel_change': 0.2461009134169659, 'asym': 0.49980571196433665, 'asym_sym': 0.5639292956774109, 'align': 0.7800252500315651, 'align_strong': 0.8349319928135438}
+[embed seed=0] rs global: loss=11.1584 beats_sym=False align_partner=-0.0140 align_partner_src=-0.0140 align_shuffled=-0.0060 mean_flow_norm=0.0032 secs=176.3887
+[embed seed=0] rs stdnorm32_joint: loss=11.1254 beats_sym=True align_partner=0.0581 align_partner_src=0.0773 align_shuffled=0.0080 mean_flow_norm=0.2044 secs=361.0911
+[embed seed=0] rs stdnorm32_driftonly: loss=11.1295 beats_sym=True align_partner=-0.0904 align_partner_src=-0.0684 align_shuffled=0.0124 mean_flow_norm=0.1864 secs=153.5793
+[embed seed=0] rs gradnet_joint: loss=11.1239 beats_sym=True align_partner=0.1031 align_partner_src=0.1288 align_shuffled=-0.0107 mean_flow_norm=0.2674 secs=368.0285
+[embed seed=0] rs gradnet_driftonly: loss=11.1233 beats_sym=True align_partner=0.0043 align_partner_src=0.0279 align_shuffled=-0.0087 mean_flow_norm=0.2233 secs=158.8883

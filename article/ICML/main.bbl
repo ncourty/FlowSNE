@@ -1,0 +1,209 @@
+\begin{thebibliography}{32}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Bao et~al.(2000)Bao, Chern, and Shen]{bao2000introduction}
+Bao, D., Chern, S.-S., and Shen, Z.
+\newblock \emph{An Introduction to {R}iemann--{F}insler Geometry}, volume 200
+  of \emph{Graduate Texts in Mathematics}.
+\newblock Springer, 2000.
+
+\bibitem[Bastidas-Ponce et~al.(2019)]{bastidasponce2019comprehensive}
+Bastidas-Ponce, A. et~al.
+\newblock Comprehensive single cell {mRNA} profiling reveals a detailed roadmap
+  for pancreatic endocrinogenesis.
+\newblock \emph{Development}, 146\penalty0 (12):\penalty0 dev173849, 2019.
+
+\bibitem[Battich et~al.(2020)Battich, Beumer, de~Barbanson, Krenning, Baron,
+  Tanenbaum, Clevers, and van Oudenaarden]{battich2020sequencing}
+Battich, N., Beumer, J., de~Barbanson, B., Krenning, L., Baron, C.~S.,
+  Tanenbaum, M.~E., Clevers, H., and van Oudenaarden, A.
+\newblock Sequencing metabolically labeled transcripts in single cells reveals
+  {mRNA} turnover strategies.
+\newblock \emph{Science}, 367\penalty0 (6482):\penalty0 1151--1156, 2020.
+
+\bibitem[Bergen et~al.(2020)Bergen, Lange, Peidli, Wolf, and
+  Theis]{bergen2020generalizing}
+Bergen, V., Lange, M., Peidli, S., Wolf, F.~A., and Theis, F.~J.
+\newblock Generalizing {RNA} velocity to transient cell states through
+  dynamical modeling.
+\newblock \emph{Nature Biotechnology}, 38:\penalty0 1408--1414, 2020.
+
+\bibitem[Chizat et~al.(2018)Chizat, Peyr{\'e}, Schmitzer, and
+  Vialard]{chizat2018scaling}
+Chizat, L., Peyr{\'e}, G., Schmitzer, B., and Vialard, F.-X.
+\newblock Scaling algorithms for unbalanced optimal transport problems.
+\newblock \emph{Mathematics of Computation}, 87\penalty0 (314):\penalty0
+  2563--2609, 2018.
+
+\bibitem[Coifman \& Lafon(2006)Coifman and Lafon]{coifman2006diffusion}
+Coifman, R.~R. and Lafon, S.
+\newblock Diffusion maps.
+\newblock \emph{Applied and Computational Harmonic Analysis}, 21\penalty0
+  (1):\penalty0 5--30, 2006.
+
+\bibitem[Cuturi(2013)]{cuturi2013sinkhorn}
+Cuturi, M.
+\newblock Sinkhorn distances: Lightspeed computation of optimal transport.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~26, 2013.
+
+\bibitem[Debaussart-Joniec et~al.(2026)Debaussart-Joniec, Blanchard, and
+  Kalogeratos]{debaussart2026finslerian}
+Debaussart-Joniec, G., Blanchard, T., and Kalogeratos, A.
+\newblock A {F}inslerian approach for embedding directed data.
+\newblock \emph{arXiv preprint arXiv:2609.37649}, 2026.
+
+\bibitem[Hinton \& Roweis(2002)Hinton and Roweis]{hinton2002sne}
+Hinton, G.~E. and Roweis, S.~T.
+\newblock Stochastic neighbor embedding.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~15, 2002.
+
+\bibitem[Jiang et~al.(2011)Jiang, Lim, Yao, and Ye]{jiang2011statistical}
+Jiang, X., Lim, L.-H., Yao, Y., and Ye, Y.
+\newblock Statistical ranking and combinatorial {H}odge theory.
+\newblock \emph{Mathematical Programming}, 127\penalty0 (1):\penalty0 203--244,
+  2011.
+
+\bibitem[La~Manno et~al.(2018)]{lamanno2018rna}
+La~Manno, G. et~al.
+\newblock {RNA} velocity of single cells.
+\newblock \emph{Nature}, 560:\penalty0 494--498, 2018.
+
+\bibitem[Landa et~al.(2021)Landa, Coifman, and Kluger]{landa2021doubly}
+Landa, B., Coifman, R.~R., and Kluger, Y.
+\newblock Doubly stochastic normalization of the {G}aussian kernel is robust to
+  heteroskedastic noise.
+\newblock \emph{SIAM Journal on Mathematics of Data Science}, 3\penalty0
+  (1):\penalty0 388--413, 2021.
+
+\bibitem[L{\'e}onard(2014)]{leonard2014survey}
+L{\'e}onard, C.
+\newblock A survey of the {S}chr{\"o}dinger problem and some of its connections
+  with optimal transport.
+\newblock \emph{Discrete and Continuous Dynamical Systems -- A}, 34\penalty0
+  (4):\penalty0 1533--1574, 2014.
+
+\bibitem[Lim(2020)]{lim2020hodge}
+Lim, L.-H.
+\newblock {H}odge {L}aplacians on graphs.
+\newblock \emph{SIAM Review}, 62\penalty0 (3):\penalty0 685--715, 2020.
+
+\bibitem[Marshall \& Coifman(2019)Marshall and Coifman]{marshall2019manifold}
+Marshall, N.~F. and Coifman, R.~R.
+\newblock Manifold learning with bi-stochastic kernels.
+\newblock \emph{IMA Journal of Applied Mathematics}, 84\penalty0 (3):\penalty0
+  455--482, 2019.
+
+\bibitem[McInnes et~al.(2018)McInnes, Healy, and Melville]{mcinnes2018umap}
+McInnes, L., Healy, J., and Melville, J.
+\newblock {UMAP}: Uniform manifold approximation and projection for dimension
+  reduction.
+\newblock \emph{arXiv preprint arXiv:1802.03426}, 2018.
+
+\bibitem[Mirebeau(2014)]{mirebeau2014efficient}
+Mirebeau, J.-M.
+\newblock Efficient fast marching with {F}insler metrics.
+\newblock \emph{Numerische Mathematik}, 126\penalty0 (3):\penalty0 515--557,
+  2014.
+
+\bibitem[Perrault-Joncas \& Meil{\u{a}}(2011)Perrault-Joncas and
+  Meil{\u{a}}]{perraultjoncas2011directed}
+Perrault-Joncas, D.~C. and Meil{\u{a}}, M.
+\newblock Directed graph embedding: an algorithm based on continuous limits of
+  {L}aplacian-type operators.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~24, 2011.
+
+\bibitem[Peyr{\'e} \& Cuturi(2019)Peyr{\'e} and Cuturi]{peyre2019computational}
+Peyr{\'e}, G. and Cuturi, M.
+\newblock Computational optimal transport.
+\newblock \emph{Foundations and Trends in Machine Learning}, 11\penalty0
+  (5--6):\penalty0 355--607, 2019.
+
+\bibitem[Pijuan-Sala et~al.(2019)]{pijuansala2019single}
+Pijuan-Sala, B. et~al.
+\newblock A single-cell molecular map of mouse gastrulation and early
+  organogenesis.
+\newblock \emph{Nature}, 566:\penalty0 490--495, 2019.
+
+\bibitem[Qiu et~al.(2022)]{qiu2022mapping}
+Qiu, X. et~al.
+\newblock Mapping transcriptomic vector fields of single cells.
+\newblock \emph{Cell}, 185\penalty0 (4):\penalty0 690--711, 2022.
+
+\bibitem[Randers(1941)]{randers1941asymmetrical}
+Randers, G.
+\newblock On an asymmetrical metric in the four-space of general relativity.
+\newblock \emph{Physical Review}, 59\penalty0 (2):\penalty0 195--199, 1941.
+
+\bibitem[Santambrogio(2015)]{santambrogio2015optimal}
+Santambrogio, F.
+\newblock \emph{Optimal Transport for Applied Mathematicians}, volume~87 of
+  \emph{Progress in Nonlinear Differential Equations and Their Applications}.
+\newblock Birkh{\"a}user, 2015.
+
+\bibitem[Sethian \& Vladimirsky(2003)Sethian and
+  Vladimirsky]{sethian2003ordered}
+Sethian, J.~A. and Vladimirsky, A.
+\newblock Ordered upwind methods for static {H}amilton--{J}acobi equations:
+  Theory and algorithms.
+\newblock \emph{SIAM Journal on Numerical Analysis}, 41\penalty0 (1):\penalty0
+  325--363, 2003.
+
+\bibitem[Sinkhorn \& Knopp(1967)Sinkhorn and Knopp]{sinkhorn1967concerning}
+Sinkhorn, R. and Knopp, P.
+\newblock Concerning nonnegative matrices and doubly stochastic matrices.
+\newblock \emph{Pacific Journal of Mathematics}, 21\penalty0 (2):\penalty0
+  343--348, 1967.
+
+\bibitem[Tenenbaum et~al.(2000)Tenenbaum, de~Silva, and
+  Langford]{tenenbaum2000global}
+Tenenbaum, J.~B., de~Silva, V., and Langford, J.~C.
+\newblock A global geometric framework for nonlinear dimensionality reduction.
+\newblock \emph{Science}, 290\penalty0 (5500):\penalty0 2319--2323, 2000.
+
+\bibitem[Van~Assel et~al.(2023)Van~Assel, Vayer, Flamary, and
+  Courty]{vanassel2023snekhorn}
+Van~Assel, H., Vayer, T., Flamary, R., and Courty, N.
+\newblock {SNEkhorn}: Dimension reduction with symmetric entropic affinities.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~36, 2023.
+
+\bibitem[van~der Maaten \& Hinton(2008)van~der Maaten and
+  Hinton]{vandermaaten2008tsne}
+van~der Maaten, L. and Hinton, G.
+\newblock Visualizing data using t-{SNE}.
+\newblock \emph{Journal of Machine Learning Research}, 9:\penalty0 2579--2605,
+  2008.
+
+\bibitem[Villani(2009)]{villani2009optimal}
+Villani, C.
+\newblock \emph{Optimal Transport: Old and New}, volume 338 of
+  \emph{Grundlehren der mathematischen Wissenschaften}.
+\newblock Springer, 2009.
+
+\bibitem[Vladymyrov \& Carreira-Perpi{\~n}{\'a}n(2013)Vladymyrov and
+  Carreira-Perpi{\~n}{\'a}n]{vladymyrov2013entropic}
+Vladymyrov, M. and Carreira-Perpi{\~n}{\'a}n, M.~{\'A}.
+\newblock Entropic affinities: Properties and efficient numerical computation.
+\newblock In \emph{International Conference on Machine Learning}, 2013.
+
+\bibitem[Weinreb et~al.(2018)Weinreb, Wolock, Tusi, Socolovsky, and
+  Klein]{weinreb2018fundamental}
+Weinreb, C., Wolock, S., Tusi, B.~K., Socolovsky, M., and Klein, A.~M.
+\newblock Fundamental limits on dynamic inference from single-cell snapshots.
+\newblock \emph{Proceedings of the National Academy of Sciences}, 115\penalty0
+  (10):\penalty0 E2467--E2476, 2018.
+
+\bibitem[Zass \& Shashua(2006)Zass and Shashua]{zass2006doubly}
+Zass, R. and Shashua, A.
+\newblock Doubly stochastic normalization for spectral clustering.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~19, 2006.
+
+\end{thebibliography}

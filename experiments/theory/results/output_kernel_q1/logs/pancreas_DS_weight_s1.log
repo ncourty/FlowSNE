@@ -1,0 +1,3 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+pancreas DS weight s1: 719s, loss 14.4468 12.7503 12.6538 12.6138 12.5918 12.5779 12.5686
+

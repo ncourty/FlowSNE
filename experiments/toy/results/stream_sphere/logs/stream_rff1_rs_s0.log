@@ -1,0 +1,3 @@
+[rs s0] stream_rff1_joint loss=13.1262 secs=1515.3439 cos_ref=0.3441 cos_ref_median=0.5516 speed_spearman=0.0187 knn=0.1751 div_rms=0.0000 curl_rms=28.0903
+[rs s0] stream_rff1_driftonly loss=12.1184 secs=572.6008 cos_ref=0.2588 cos_ref_median=0.4780 speed_spearman=0.0446 knn=0.6799 div_rms=0.0000 curl_rms=7.3821
+

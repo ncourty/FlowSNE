@@ -1,0 +1,4 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+[rs s0] flow_rff0.3_joint loss=11.6432 secs=1390.5980 cos_ref=0.9671 cos_ref_median=0.9917 speed_spearman=0.8257 knn=0.7023 div_rms=0.5720 curl_rms=0.5758
+[rs s0] flow_rff0.3_driftonly loss=11.8694 secs=554.0910 cos_ref=0.8449 cos_ref_median=0.9764 speed_spearman=0.4193 knn=0.6799 div_rms=0.3388 curl_rms=0.3657
+

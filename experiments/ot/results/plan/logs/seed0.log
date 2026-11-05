@@ -1,0 +1,26 @@
+[seed 0] true cluster plan (rows S, cols T):
+[[0.171 0.2   0.029]
+ [0.022 0.    0.278]
+ [0.007 0.    0.293]]
+mean |displacement| 15.53, median within-source dist 11.03, min src-tgt dist 11.05
+[seed 0] pca                          plan_point=0.013 plan_cluster=0.840 knn=0.249 silhouette=0.234 coherence=0.978 corresp_r2=0.430  (0s)
+[seed 0] sym                          loss=10.656 plan_point=0.002 plan_cluster=0.942 knn=0.682 silhouette=0.724 coherence=0.986 corresp_r2=0.301  (52s)
+[seed 0] drift_ds_joint               loss=10.644 plan_point=0.007 plan_cluster=0.942 knn=0.695 silhouette=0.681 coherence=0.980 corresp_r2=0.245 flow_align=0.009 flow_align_src=0.079 flow_align_tgt=-0.062 flow_align_shuf=-0.056 flow_align_wrongcl=-0.107  (213s)
+[seed 0] drift_ds_driftonly           loss=10.620 plan_point=0.002 plan_cluster=0.942 knn=0.694 silhouette=0.709 coherence=0.988 corresp_r2=0.313 flow_align=-0.037 flow_align_src=-0.020 flow_align_tgt=-0.055 flow_align_shuf=-0.096 flow_align_wrongcl=-0.022  (103s)
+[seed 0] drift_rs_joint               loss=10.800 plan_point=0.004 plan_cluster=0.942 knn=0.690 silhouette=0.689 coherence=0.985 corresp_r2=0.330 flow_align=0.224 flow_align_src=0.213 flow_align_tgt=0.235 flow_align_shuf=0.062 flow_align_wrongcl=0.159  (273s)
+[seed 0] drift_rs_driftonly           loss=10.806 plan_point=0.002 plan_cluster=0.942 knn=0.695 silhouette=0.725 coherence=0.990 corresp_r2=0.346 flow_align=0.259 flow_align_src=0.199 flow_align_tgt=0.318 flow_align_shuf=0.104 flow_align_wrongcl=0.171  (115s)
+[seed 0] cross_sym[0.05]              loss=10.933 plan_point=0.000 plan_cluster=0.942 knn=0.680 silhouette=0.643 coherence=0.970 corresp_r2=0.286  (70s)
+[seed 0] cross_randers[0.05]_joint    loss=10.946 plan_point=0.004 plan_cluster=0.942 knn=0.683 silhouette=0.627 coherence=0.975 corresp_r2=0.302 flow_align=0.842 flow_align_src=0.905 flow_align_tgt=0.778 flow_align_shuf=0.423 flow_align_wrongcl=0.656  (290s)
+[seed 0] cross_randers[0.05]_driftonly loss=10.929 plan_point=0.000 plan_cluster=0.942 knn=0.680 silhouette=0.643 coherence=0.970 corresp_r2=0.286 flow_align=0.749 flow_align_src=0.842 flow_align_tgt=0.656 flow_align_shuf=0.421 flow_align_wrongcl=0.720  (125s)
+[seed 0] crossdrift_randers[0.05]_joint loss=10.915 plan_point=0.009 plan_cluster=0.942 knn=0.688 silhouette=0.615 coherence=0.969 corresp_r2=0.273 flow_align=0.842 flow_align_src=0.916 flow_align_tgt=0.768 flow_align_shuf=0.436 flow_align_wrongcl=0.687  (291s)
+[seed 0] crossdrift_randers[0.05]_driftonly loss=10.898 plan_point=0.002 plan_cluster=0.942 knn=0.687 silhouette=0.637 coherence=0.970 corresp_r2=0.269 flow_align=0.772 flow_align_src=0.903 flow_align_tgt=0.642 flow_align_shuf=0.413 flow_align_wrongcl=0.569  (130s)
+[seed 0] cross_sym[0.2]               loss=11.436 plan_point=0.024 plan_cluster=0.942 knn=0.633 silhouette=0.199 coherence=0.694 corresp_r2=0.482  (74s)
+[seed 0] cross_randers[0.2]_joint     loss=11.481 plan_point=0.009 plan_cluster=0.942 knn=0.626 silhouette=0.366 coherence=0.863 corresp_r2=0.235 flow_align=0.819 flow_align_src=0.827 flow_align_tgt=0.811 flow_align_shuf=0.354 flow_align_wrongcl=0.267  (265s)
+[seed 0] cross_randers[0.2]_driftonly loss=11.404 plan_point=0.024 plan_cluster=0.942 knn=0.633 silhouette=0.199 coherence=0.694 corresp_r2=0.482 flow_align=0.579 flow_align_src=0.548 flow_align_tgt=0.609 flow_align_shuf=0.186 flow_align_wrongcl=-0.215  (126s)
+[seed 0] crossdrift_randers[0.2]_joint loss=11.447 plan_point=0.004 plan_cluster=0.942 knn=0.621 silhouette=0.382 coherence=0.876 corresp_r2=0.223 flow_align=0.858 flow_align_src=0.877 flow_align_tgt=0.839 flow_align_shuf=0.315 flow_align_wrongcl=0.309  (315s)
+[seed 0] crossdrift_randers[0.2]_driftonly loss=11.386 plan_point=0.013 plan_cluster=0.942 knn=0.661 silhouette=0.279 coherence=0.865 corresp_r2=0.357 flow_align=0.710 flow_align_src=0.805 flow_align_tgt=0.615 flow_align_shuf=0.259 flow_align_wrongcl=0.062  (126s)
+[seed 0] cross_sym[0.5]               loss=10.258 plan_point=1.000 plan_cluster=1.000 knn=0.383 silhouette=-0.029 coherence=0.174 corresp_r2=1.000  (72s)
+[seed 0] cross_randers[0.5]_joint     loss=10.294 plan_point=0.911 plan_cluster=0.996 knn=0.376 silhouette=-0.045 coherence=0.187 corresp_r2=0.983 flow_align=0.027 flow_align_src=0.027 flow_align_tgt=0.028 flow_align_shuf=-0.020 flow_align_wrongcl=-0.257  (283s)
+[seed 0] cross_randers[0.5]_driftonly loss=10.258 plan_point=1.000 plan_cluster=1.000 knn=0.383 silhouette=-0.029 coherence=0.174 corresp_r2=1.000 flow_align=-0.024 flow_align_src=-0.024 flow_align_tgt=-0.024 flow_align_shuf=0.010 flow_align_wrongcl=-0.160  (106s)
+[seed 0] crossdrift_randers[0.5]_joint loss=10.285 plan_point=0.847 plan_cluster=0.996 knn=0.378 silhouette=-0.048 coherence=0.171 corresp_r2=0.952 flow_align=0.136 flow_align_src=0.137 flow_align_tgt=0.134 flow_align_shuf=0.019 flow_align_wrongcl=0.008  (258s)
+[seed 0] crossdrift_randers[0.5]_driftonly loss=10.237 plan_point=1.000 plan_cluster=1.000 knn=0.380 silhouette=-0.030 coherence=0.171 corresp_r2=1.000 flow_align=-0.009 flow_align_src=-0.009 flow_align_tgt=-0.008 flow_align_shuf=0.010 flow_align_wrongcl=0.019  (110s)

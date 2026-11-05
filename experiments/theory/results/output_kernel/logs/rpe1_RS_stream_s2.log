@@ -1,0 +1,3 @@
+[KeOps] Warning : CUDA libraries not found or could not be loaded; Switching to CPU only.
+rpe1 RS stream s2: 1048s, loss 14.6641 13.6322 13.5968 13.5841 13.5753 13.5691 13.5695
+
