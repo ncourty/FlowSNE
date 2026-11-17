@@ -78,6 +78,11 @@ def main():
     ap.add_argument("--exaggeration", type=float, default=12.0)
     ap.add_argument("--exaggeration-iters", type=int, default=250)
     ap.add_argument("--lr-schedule", choices=["constant", "cosine"], default="cosine")
+    ap.add_argument("--balanced", action="store_true",
+                    help="balanced (Sinkhorn) input affinities, dense, instead of row-stochastic sparse")
+    ap.add_argument("--rho-in", type=float, default=0.95, help="input drift norm bound")
+    ap.add_argument("--rho-out", type=float, default=0.95, help="output (fitted) drift norm bound")
+    ap.add_argument("--flow-lr", type=float, default=None, help="the flow's own learning rate (default: --lr)")
     ap.add_argument("--tag", default="repr_ee")
     a = ap.parse_args()
     res = os.path.join(HERE, "rpe1_results", a.tag)
@@ -92,13 +97,21 @@ def main():
     n, k = len(X), a.k_chain
     dt = torch.float32
     settings = dict(iters=a.iters, lr=a.lr, exaggeration=a.exaggeration,
-                    exaggeration_iters=a.exaggeration_iters, lr_schedule=a.lr_schedule)
+                    exaggeration_iters=a.exaggeration_iters, lr_schedule=a.lr_schedule,
+                    balanced=a.balanced, rho_in=a.rho_in, rho_out=a.rho_out, flow_lr=a.flow_lr)
+    settings = {k: v for k, v in settings.items() if v is not None}   # unset options: older dirs stay valid
     sfile = os.path.join(res, "fit_settings.json")
     if os.path.exists(sfile) and json.load(open(sfile)) != settings:
         raise SystemExit(f"{res} holds fits made with {json.load(open(sfile))}, not {settings}: "
                          "use another --tag")
     json.dump(settings, open(sfile, "w"), indent=1)
-    out = dict(args=vars(a), n=n, seam_cells=int(seam.sum()), scores={}, circulation={}, fits={})
+    out = dict(args=vars(a), n=n, seam_cells=int(seam.sum()), scores={}, circulation={}, fits={},
+               knn={}, omega={})
+    nnX = knn(X, 10)
+
+    def knn_pres(Z):
+        nnZ = knn(Z, 10)
+        return float(np.mean([len(set(nnX[i]) & set(nnZ[i])) / 10 for i in range(n)]))
 
     def advance(M):
         return phase_progress(M, theta, a.steps)
@@ -109,6 +122,7 @@ def main():
         for s in a.steps:
             rel = adv[s] - adv0[s]
             r[f"adv_s{s}"], r[f"adv_s{s}_seam"] = float(rel.mean()), float(rel[seam].mean())
+            r[f"adv_s{s}_M"], r[f"adv_s{s}_G1"] = float(rel[pos >= 11 / 12].mean()), float(rel[pos < 1 / 12].mean())
         out["scores"].setdefault(name, {})[f"seed{seed}"] = r
         json.dump(out, open(path, "w"), indent=1)
         print(f"  {name:22s} seed {seed}  " + "  ".join(
@@ -121,16 +135,26 @@ def main():
         loops = build_loops(Z, pos, E, a.n_loops, 12, rng)
         mean, frac, _ = stats(loops, edge_flow(Z, F, E), 12)
         out["circulation"].setdefault(name, {})[f"seed{seed}"] = dict(mean=mean, frac_pos=frac)
+        out["knn"].setdefault(name, {})[f"seed{seed}"] = knn_pres(Z)
 
     pcs = np.linalg.svd(X - X.mean(0), full_matrices=False)[2]
     Xt = torch.tensor(X, dtype=dt)
-    kw = dict(doubly_stochastic=False, sparsity=True, perplexity=math.sqrt(n))
-    P0, i0 = EntropicRandersAffinity(omega=None, **kw)(Xt)
+    kw = dict(doubly_stochastic=a.balanced, sparsity=not a.balanced, perplexity=math.sqrt(n),
+              max_omega_norm=a.rho_in)
+
+    def inaff(omega):
+        t0 = time.time()
+        r = EntropicRandersAffinity(omega=omega, **kw)(Xt)
+        print(f"  input affinity ({'balanced' if a.balanced else 'row-stochastic'}) in {time.time() - t0:.0f}s",
+              flush=True)
+        return (r, None) if torch.is_tensor(r) else r
+
+    P0, i0 = inaff(None)
 
     def fit(name, dim, seed, P, idx, train_flow):
         torch.manual_seed(seed)
         flow = input_std_norm_flow(dim, hidden_dim=32) if train_flow else mlp_flow(dim)
-        aff = RandersAffinity(dim, flow=flow, degrees_of_freedom=1.0).to(dt)
+        aff = RandersAffinity(dim, flow=flow, degrees_of_freedom=1.0, max_omega_norm=a.rho_out).to(dt)
         zf, ff = os.path.join(res, f"Z_{name}_s{seed}.npy"), os.path.join(res, f"flow_{name}_s{seed}.pt")
         if os.path.exists(zf) and os.path.exists(ff):
             Z = torch.tensor(np.load(zf), dtype=dt)
@@ -141,7 +165,7 @@ def main():
             Z = fit_embedding(aff, P, init, indices=idx, max_iter=a.iters, lr=a.lr, seed=seed,
                               train_flow=train_flow, history=hist, log_every=500,
                               lr_schedule=a.lr_schedule, early_exaggeration=a.exaggeration,
-                              exaggeration_iters=a.exaggeration_iters)
+                              exaggeration_iters=a.exaggeration_iters, flow_lr=a.flow_lr)
             np.save(zf, Z.numpy())
             torch.save(aff.flow.state_dict(), ff)
             out["fits"][f"{name}_s{seed}"] = [v for _, v in hist]
@@ -156,7 +180,7 @@ def main():
         print(f"velocity: {vname}", flush=True)
         score(f"{vname}/input30", 0, chain(X, V, k), chain(X, V, k, directed=False))
         circulation(f"{vname}/input30", 0, X, V)
-        P, idx = EntropicRandersAffinity(omega=torch.tensor(V, dtype=dt), **kw)(Xt)
+        P, idx = inaff(torch.tensor(V, dtype=dt))
         for dim in a.dims:
             Z = X[:, :dim]
             score(f"{vname}/pca{dim}", 0, chain(Z, V[:, :dim], k), chain(Z, V[:, :dim], k, directed=False))
@@ -172,6 +196,8 @@ def main():
                 Zf = Zt.numpy().astype(np.float64)
                 with torch.no_grad():
                     F = (-aff.omega_at(Zt)).numpy().astype(np.float64)
+                    out["omega"].setdefault(f"{vname}/flowsne{dim}", {})[f"seed{seed}"] = [
+                        float(q) for q in np.percentile(np.linalg.norm(F, axis=1), [10, 50, 90])]
                     dist, nb = randers_knn(Zt, aff.omega_at(Zt), k)
                     dist0, nb0 = randers_knn(Zt, torch.zeros_like(Zt), k)
                 M_nat = chain_from_rows((1 / (1 + dist ** 2)).numpy().astype(np.float64), nb.numpy(), n)
@@ -183,7 +209,8 @@ def main():
                     maps[(vname, "flowsne")] = (Zf, F)
         json.dump(out, open(path, "w"), indent=1)
     write_report(out, res)
-    figure(maps, pos, out, res)
+    if maps:
+        figure(maps, pos, out, res)
 
 
 def _agg(v):
@@ -201,14 +228,22 @@ def write_report(out, res):
          "on the map's own 30-NN graph (0 for any gradient). `_native` = FlowSNE's Randers walk vs "
          "the field switched off. Mean ± std over seeds.", "",
          "| representation | " + " | ".join(f"s={s}" for s in steps) + " | "
-         + " | ".join(f"s={s}, seam" for s in steps) + " | circulation |",
-         "|---|" + "---|" * (2 * len(steps) + 1)]
+         + " | ".join(f"s={s}, seam" for s in steps)
+         + f" | s={steps[-1]}, late M | s={steps[-1]}, early G1 | circulation | 10-NN | \\|ω\\| q10/50/90 |",
+         "|---|" + "---|" * (2 * len(steps) + 5)]
     for nm, by in out["scores"].items():
         rs = list(by.values())
         circ = out["circulation"].get(nm)
         c = _agg([v["mean"] for v in circ.values()]) if circ else "–"
+        kn = out.get("knn", {}).get(nm)
+        kn = _agg(list(kn.values())) if kn else "–"
+        om = out.get("omega", {}).get(nm)
+        om = "/".join(f"{q:.2f}" for q in np.mean([v for v in om.values()], 0)) if om else "–"
+        s_last = steps[-1]
         L.append(f"| {nm} | " + " | ".join(_agg([r[f'adv_s{s}'] for r in rs]) for s in steps) + " | "
-                 + " | ".join(_agg([r[f'adv_s{s}_seam'] for r in rs]) for s in steps) + f" | {c} |")
+                 + " | ".join(_agg([r[f'adv_s{s}_seam'] for r in rs]) for s in steps)
+                 + f" | {_agg([r.get(f'adv_s{s_last}_M', float('nan')) for r in rs])}"
+                 + f" | {_agg([r.get(f'adv_s{s_last}_G1', float('nan')) for r in rs])} | {c} | {kn} | {om} |")
     open(os.path.join(res, "REPR.md"), "w", encoding="utf-8").write("\n".join(L) + "\n")
     print("wrote", os.path.join(res, "REPR.md"))
 

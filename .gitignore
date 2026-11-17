@@ -20,3 +20,8 @@ experiments/**/Z_*.npy
 experiments/**/flow_*.pt
 experiments/**/P_*.npy
 experiments/**/*.lock
+# experiment outputs (results, logs) stay local; scripts and write-ups are tracked
+experiments/**/results/
+experiments/**/*_results/
+experiments/**/logs/
+*.log

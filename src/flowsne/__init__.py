@@ -23,6 +23,7 @@ from .flows import (
 )
 from .affinity import EntropicRandersAffinity, RandersAffinity
 from .embedding import JointAffinityMatcher, fit_drift_only, fit_embedding
+from .baselines import randers_geodesics, finsler_mds, finsler_tsne, constant_drift, select_alpha
 
 __all__ = [
     "randers_distance",
@@ -49,4 +50,9 @@ __all__ = [
     "JointAffinityMatcher",
     "fit_drift_only",
     "fit_embedding",
+    "randers_geodesics",
+    "finsler_mds",
+    "finsler_tsne",
+    "constant_drift",
+    "select_alpha",
 ]

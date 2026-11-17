@@ -1,0 +1,100 @@
+% ======================================================================
+\section{FlowSNE}
+\label{sec:flowsne}
+
+\subsection{A Randers embedding kernel with a learned drift}
+\label{sec:kernel}
+
+A symmetric embedding kernel only sees $P+P^\top$ (\cref{sec:background}),
+so the embedding must carry its own direction. FlowSNE uses the Student
+kernel \eqref{eq:student} on the averaged Randers cost in the embedding,
+with a drift given by a neural network $\omega_\theta:\R^d\to\R^d$:
+\begin{gather}
+  Q_{ij}(Z,\theta)\propto\Big(1+\dav_\theta(z_i\to z_j)^2\Big)^{-1},
+  \label{eq:Q}\\
+  \dav_\theta(z_i\to z_j)=\|z_j-z_i\|+\bar\omega_{ij}^\top(z_j-z_i),
+  \nonumber
+\end{gather}
+with $\bar\omega_{ij}=\tfrac12\big(\omega_\theta(z_i)+\omega_\theta(z_j)\big)$,
+normalised over all ordered pairs $i\neq j$. We minimise
+\begin{equation}
+  \mathcal{L}(Z,\theta)=-\sum_{i\neq j}P_{ij}\log Q_{ij}(Z,\theta)
+  \label{eq:loss}
+\end{equation}
+over the layout $Z$ and the network weights $\theta$ jointly, with $P$
+either $P^{\RS}$ or $P^{\Sk}$ (\cref{def:era}). The fitted field is
+defined everywhere in the embedding, not only at the samples, and the
+arrows to draw are $-\omega_\theta(z)$. The layout and its arrows are
+two parts of the same model.
+
+\paragraph{Why the averaged form.}
+On the output side the drift is a function, so both endpoint values are
+available at no extra cost: one forward pass of $\omega_\theta$ on the
+$n$ points gives every $\dav_\theta(z_i\to z_j)$. With $\omega\equiv c$
+constant, \eqref{eq:Q} is the Finsler t-SNE kernel of
+\citet{dages2026harnessing}.
+
+\paragraph{Architecture.}
+Admissibility is enforced pointwise by a smooth squashing of an
+unconstrained output $r_\theta(z)$,
+\begin{equation}
+  \omega_\theta(z)=\rho\,\frac{r_\theta(z)}{1+\|r_\theta(z)\|},\qquad
+  r_\theta(z)=\mathrm{MLP}_\theta\big(z/s(Z)\big),
+  \label{eq:flow}
+\end{equation}
+so $\|\omega_\theta\|<\rho$ everywhere. The input is divided by the
+current global standard deviation $s(Z)$ of the layout, treated as a
+constant in the backward pass: layouts grow by orders of magnitude during
+a fit, and without it the $\tanh$ units saturate. The MLP has one hidden
+layer of 32 $\tanh$ units, and its last layer is initialised at zero, so
+that the fit starts from the symmetric kernel. Any network with output
+in $\R^d$ can be plugged in; random Fourier features
+\citep{rahimi2007rff} and deeper networks did not help
+(\cref{app:architecture}).
+
+\paragraph{What the loss rewards.}
+The gauge of \cref{sec:gauge} acts on the output side as well. Take the
+Laplace kernel $Q\propto e^{-d}$ and perturb a symmetric fit by a
+gradient drift, $d_{ij}\to d_{ij}+t\,(h_j-h_i)$ for some $h\in\R^n$. Since
+$Q$ is symmetric at $t=0$,
+\begin{equation}
+  \frac{d\mathcal{L}}{dt}\Big|_{t=0}=\sum_{ij}P_{ij}(h_j-h_i)=\big\langle P^\top\1-P\1,\;h\big\rangle .
+  \label{eq:firstorder}
+\end{equation}
+With a balanced $P$ this vanishes for every $h$: to first order the loss
+does not reward the gradient part of the output drift, only its
+circulation. With a row-stochastic $P$ it rewards the gradient of the
+in-degree excess of $P$. For the Student kernel the cancellation is
+approximate; on pancreas, gradient perturbations of the output drift
+change the loss $4$ times less than rotational ones of the same size under
+$P^{\Sk}$, and $2$ times less under $P^{\RS}$ (\cref{app:output}).
+\todo[inline]{Decide whether this paragraph stays in the main text.}
+
+\paragraph{Fitting.}
+We optimise \eqref{eq:loss} with Adam from a PCA initialisation, with
+early exaggeration of $P$ \citep{vandermaaten2008tsne,kobak2019art}. On
+most datasets a joint fit of $(Z,\theta)$ is stable; on some (MNIST
+activations in our experience) it ends worse than the symmetric fit. A
+short joint probe against the symmetric loss decides; if it fails, we fit
+the symmetric layout first and then $\theta$ alone on the frozen layout
+(\emph{drift-only}).
+
+\subsection{Implementation}
+\label{sec:implementation}
+
+FlowSNE is implemented in TorchDR \citep{vanassel2025torchdr}, whose
+affinity classes and matching loop it extends. Three points make it run
+at scale (details and timings in \cref{app:implementation}). The drift
+term of \eqref{eq:averaged} rearranges into $(n,n)$ matrix products, so
+neither cost ever forms the $(n,n,D)$ tensor of differences. With KeOps
+\citep{charlier2021keops} the output kernel \eqref{eq:Q} and its
+normaliser are lazy tensors reduced on the fly, the input affinity keeps
+the $k=5\mathcal P$ nearest points of each row under the \emph{directed}
+cost, and the loss \eqref{eq:loss} splits into an attraction on the kept
+entries and the lazy normaliser, in $O(n)$ memory; dense and lazy paths
+agree to $10^{-15}$. Sinkhorn runs in the log domain with early stopping,
+because per-row perplexity bandwidths make the balanced kernel badly
+conditioned and thousands of iterations are needed. A 3000-step fit of
+$10^5$ points takes about 18 minutes on a consumer GPU, with 1.7~GB of
+memory, and the fitted field keeps its quality at that scale provided the
+perplexity grows as $\sqrt n$.

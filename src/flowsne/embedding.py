@@ -42,7 +42,9 @@ def fit_embedding(affinity_out, P, init, indices=None, max_iter: int = 1500, lr:
                   train_flow: bool = True, rescale_init: bool = True, anchor=None,
                   anchor_weight: float = 0.0, history: list | None = None, log_every: int = 100,
                   flow_lr: float | None = None, lr_schedule: str = "constant",
-                  early_exaggeration: float = 1.0, exaggeration_iters: int = 0):
+                  early_exaggeration: float = 1.0, exaggeration_iters: int = 0,
+                  warmup_iters: int = 0, tol: float = 0.0, field_tol: float = 1e-2,
+                  diagnostics: list | None = None):
     """Fit an embedding (and/or ``affinity_out``'s flow) by Adam on
     ``affinity_out.cross_entropy(Z, P, indices)`` -- dense ``P`` (n, n) or
     sparse ``P`` (n, k) + ``indices`` (``EntropicRandersAffinity(sparsity=
@@ -73,8 +75,25 @@ def fit_embedding(affinity_out, P, init, indices=None, max_iter: int = 1500, lr:
     ``exaggeration_iters`` iterations (t-SNE's early exaggeration, which
     mainly shapes the global layout).
 
+    ``warmup_iters`` ramps every rate linearly from 0 over the first
+    iterations (before the cosine decay, if any).
+
+    Convergence test (every ``log_every`` iterations, after exaggeration and
+    warm-up): stop when, over the last window, the relative loss decrease is
+    below ``tol`` AND the layout and the field have both stopped moving --
+    ``||Z_t - Z_{t-w}|| / ||Z_t||`` and ``||w_t - w_{t-w}|| / ||w_t||`` (the
+    drift at the points, ``affinity_out.omega_at``) below ``field_tol``. The
+    loss alone can plateau while the layout still drifts, or the network still
+    reshapes the field. All three are divided by the current schedule factor
+    (Adam's step, hence the progress per window, scales with the rate): a
+    decayed rate would otherwise pass for convergence. ``tol=0`` (default) runs
+    all ``max_iter`` iterations.
+
     ``history``: a list to which ``(iteration, loss)`` is appended every
     ``log_every`` iterations and after the last one (loss before that step).
+    ``diagnostics``: a list to which a dict per check is appended (iteration,
+    loss, relative loss decrease, Z and field change over the window, gradient
+    norm of each parameter group, current learning rate).
     """
     torch.manual_seed(seed)
     Z = torch.as_tensor(init).to(dtype=P.dtype, device=P.device).detach().clone()
@@ -93,13 +112,22 @@ def fit_embedding(affinity_out, P, init, indices=None, max_iter: int = 1500, lr:
     if not groups:
         raise ValueError("fit_embedding: nothing to train.")
     opt = torch.optim.Adam(groups, lr=lr)
-    if lr_schedule == "cosine":
-        sched = torch.optim.lr_scheduler.LambdaLR(
-            opt, lambda t: max(0.01, 0.5 * (1 + math.cos(math.pi * t / max_iter))))
-    elif lr_schedule == "constant":
-        sched = None
-    else:
+    if lr_schedule not in ("constant", "cosine"):
         raise ValueError(f"lr_schedule must be 'constant' or 'cosine', got {lr_schedule!r}")
+
+    def factor(t):
+        f = 1.0
+        if lr_schedule == "cosine":
+            f = max(0.01, 0.5 * (1 + math.cos(math.pi * t / max_iter)))
+        if t < warmup_iters:
+            f *= (t + 1) / warmup_iters
+        return f
+
+    sched = (torch.optim.lr_scheduler.LambdaLR(opt, factor)
+             if lr_schedule != "constant" or warmup_iters else None)
+    has_field = hasattr(affinity_out, "omega_at")
+    check = tol > 0 or diagnostics is not None
+    prev = None  # (loss, Z, field) at the previous check
     for it in range(max_iter):
         opt.zero_grad(set_to_none=True)
         if it < exaggeration_iters and early_exaggeration != 1.0:
@@ -111,6 +139,32 @@ def fit_embedding(affinity_out, P, init, indices=None, max_iter: int = 1500, lr:
         if anchor is not None and anchor_weight:
             loss = loss + anchor_weight * ((Z - anchor) ** 2).sum(-1).mean()
         loss.backward()
+        if check and it % log_every == 0:
+            with torch.no_grad():
+                Zc = Z.detach().clone()
+                Fc = affinity_out.omega_at(Zc).detach() if has_field else None
+                cur = float(loss.detach())
+                f = factor(it) if sched is not None else 1.0
+                rec = {"it": it, "loss": cur, "lr_factor": f,
+                       "lr": [g["lr"] for g in opt.param_groups],
+                       "grad_norm": [float(torch.sqrt(sum((q.grad ** 2).sum() for q in g["params"]
+                                                          if q.grad is not None)))
+                                     for g in opt.param_groups]}
+                if prev is not None:
+                    rec["rel_loss_drop"] = (prev[0] - cur) / abs(cur)
+                    rec["z_change"] = float((Zc - prev[1]).norm() / Zc.norm().clamp_min(1e-12))
+                    rec["field_change"] = (float((Fc - prev[2]).norm() / Fc.norm().clamp_min(1e-12))
+                                           if has_field else 0.0)
+                prev = (cur, Zc, Fc)
+            if diagnostics is not None:
+                diagnostics.append(rec)
+            if (tol > 0 and "rel_loss_drop" in rec and it >= max(exaggeration_iters, warmup_iters)
+                    + log_every
+                    and abs(rec["rel_loss_drop"]) < tol * f
+                    and rec["z_change"] < field_tol * f and rec["field_change"] < field_tol * f):
+                if history is not None and history[-1][0] != it:
+                    history.append((it, float(loss.detach())))
+                break
         opt.step()
         if sched is not None:
             sched.step()

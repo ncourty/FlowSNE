@@ -94,7 +94,8 @@ def grid_field(Z, F, bins=20, min_count=5, lo=None, hi=None):
 
 
 def grid_arrows(ax, Z, F, bins=20, min_count=5, lo=None, hi=None, ref=None, ref_cells=1.0,
-                key=True, key_label="|ω|", color="black", width=0.009, halo=True, zorder=3):
+                key=True, key_label="|ω|", color="black", width=0.009, halo=True, zorder=3,
+                key_size=8):
     """One arrow per occupied grid cell (see ``grid_field``), at the cell's
     sample centroid; opacity grows with the cell's count.
 
@@ -124,7 +125,7 @@ def grid_arrows(ax, Z, F, bins=20, min_count=5, lo=None, hi=None, ref=None, ref_
     q = ax.quiver(pos[:, 0], pos[:, 1], U, V, color=rgba, width=width, zorder=zorder + 0.1, **kw)
     if key:
         ax.quiverkey(q, 0.80, 0.04, ref * scale, f"{key_label} = {ref:.2f}", labelpos="W",
-                     coordinates="axes", color=color, fontproperties={"size": 8})
+                     coordinates="axes", color=color, fontproperties={"size": key_size})
     return ref
 
 

@@ -1,0 +1,98 @@
+%%%%%%%% FlowSNE method paper -- ICML template %%%%%%%%%%%%%%%%%%%%%%%%
+% Working draft, started 6 Nov 2026. Replaces the theory-only draft in
+% ../ICML (kept as is). Page target: 8 pages of main text.
+% Rough budget: intro 1, related work 0.75, background 0.75, Randers
+% affinities 2, FlowSNE 1.25, experiments 2 (6.3 reserved), conclusion 0.25.
+
+\documentclass{article}
+
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{hyperref}
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+
+% blind submission; switch to [preprint] or [accepted] as needed
+\usepackage{icml2026}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{amsthm}
+\usepackage[capitalize,noabbrev]{cleveref}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\usepackage[textsize=tiny]{todonotes}
+\newcommand{\tbd}[1]{\textcolor{red}{[TODO\ifx\relax#1\relax\else: #1\fi]}}
+
+% ---------------------------------------------------------------- macros
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\1}{\mathbf{1}}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\Sep}{\mathcal{S}}
+\newcommand{\Asym}{\mathcal{A}}
+\newcommand{\Grad}{\mathcal{G}}
+\newcommand{\cyc}{\operatorname{cyc}}
+\newcommand{\Sk}{\operatorname{Sk}}
+\newcommand{\RS}{\operatorname{RS}}
+\newcommand{\dF}{d_F}
+\newcommand{\dfr}{\hat d}
+\newcommand{\dav}{\bar d}
+\newcommand{\E}{\mathbb{E}}
+
+\icmltitlerunning{FlowSNE: Neighbour Embeddings with Randers Costs}
+
+\begin{document}
+
+\twocolumn[
+  \icmltitle{FlowSNE: Neighbour Embeddings of Data with Velocities\\
+    through Randers Affinities}
+
+  \begin{icmlauthorlist}
+    \icmlauthor{Anonymous}{anon}
+  \end{icmlauthorlist}
+  \icmlaffiliation{anon}{Anonymous institution}
+  \icmlcorrespondingauthor{Anonymous}{anon@anon}
+  \icmlkeywords{dimensionality reduction, neighbour embedding, t-SNE, Finsler geometry, Randers metric, optimal transport, Sinkhorn, RNA velocity}
+  \vskip 0.3in
+]
+
+\printAffiliationsAndNotice{}
+
+\input{sections/abstract}
+
+\input{sections/introduction}
+
+\input{sections/related}
+
+\input{sections/background}
+
+\input{sections/randers_affinity}
+
+\input{sections/flowsne}
+
+\input{sections/experiments}
+
+\input{sections/conclusion}
+
+\bibliography{references}
+\bibliographystyle{icml2026}
+
+\newpage
+\appendix
+\onecolumn
+\input{sections/appendix}
+
+\end{document}

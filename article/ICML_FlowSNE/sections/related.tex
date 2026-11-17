@@ -1,0 +1,67 @@
+% ======================================================================
+\section{Related work}
+\label{sec:related}
+
+\paragraph{Dimensionality reduction.}
+Linear methods, PCA \citep{pearson1901pca} and classical MDS
+\citep{torgerson1952mds}, preserve variance or pairwise distances.
+Manifold learning replaces Euclidean distances by intrinsic ones: graph
+geodesics in Isomap \citep{tenenbaum2000global}, local linear
+reconstructions in LLE \citep{roweis2000lle}, and the spectrum of a graph
+Laplacian in Laplacian eigenmaps \citep{belkin2003laplacian}. Diffusion
+maps \citep{coifman2006diffusion} embed with the eigenvectors of a
+normalised Markov kernel, so that Euclidean distances in the embedding
+approximate diffusion distances; PHATE \citep{moon2019phate} builds on
+them for single-cell data. Neighbour embeddings instead match
+\emph{affinities}: SNE and t-SNE
+\citep{hinton2002sne,vandermaaten2008tsne} calibrate one entropic
+bandwidth per point to a target perplexity
+\citep{vladymyrov2013entropic} and fit a heavy-tailed kernel in the
+embedding; UMAP \citep{mcinnes2018umap} uses fuzzy-set affinities.
+SNEkhorn \citep{vanassel2023snekhorn} replaces the row normalisation by
+a symmetric entropic optimal-transport problem with controlled marginals,
+which removes the hubs and density artefacts of row-stochastic
+affinities. All of these build their affinities from symmetric costs, or
+symmetrise them before embedding.
+
+\paragraph{Asymmetric data and Finsler embeddings.}
+Asymmetric proximities have long been embedded by variants of MDS
+\citep{okada1987asymmetric}, and directed graphs by factorising
+asymmetric proximity matrices \citep{ou2016hope}. Two recent lines use
+Finsler geometry explicitly. Finsler MDS \citep{dages2025finsler}
+embeds an asymmetric dissimilarity matrix into a \emph{canonical Randers
+space}, Euclidean space with one constant drift, by a Finsler version of
+SMACOF; a follow-up \citep{dages2026harnessing} extends t-SNE and UMAP to
+that output space. There, the asymmetry comes from the data's sampling
+density, through the per-point bandwidths of SNE, and the output drift
+is a fixed constant vector: the data carry no velocities, and the
+embedding carries no field. \citet{debaussart2026finslerian} start from
+directed (e.g.\ Randers) distances and take the diffusion-maps route:
+the symmetric part of a $\theta$-normalised directed kernel converges to
+a weighted Laplacian, which gives the layout, and its antisymmetric part
+to a transport along the centroid field of the Finsler unit ball, which
+gives a drift read off that symmetric layout afterwards.
+
+\paragraph{Data with velocities.}
+In single-cell biology, RNA velocity
+\citep{lamanno2018rna,bergen2020generalizing} is shown by projecting it
+onto a precomputed t-SNE or UMAP layout through a transition kernel on
+the cells' neighbourhood graph; CellRank \citep{lange2022cellrank} and
+dynamo \citep{qiu2022mapping} use such kernels and vector-field
+reconstructions to infer fates and dynamics, again on a fixed layout.
+None of these lets the velocity shape the layout, and the projected
+arrows are known to depend on the embedding \citep{bergen2021rna}.
+Velocities also enter optimal-transport costs for learning dynamics from
+snapshots: kinematic interpolants \citep{jiang2026kinematic} couple
+position--velocity pairs under a cost whose cross term
+$(v_i+v_j)^\top(x_j-x_i)$ is, up to scaling, the drift term of our
+averaged Randers cost (\cref{sec:randers}). That cost serves to match
+two snapshots and fit a second-order dynamics, not to embed one sample.
+
+\paragraph{Position of this work.}
+To our knowledge, no neighbour embedding takes per-sample velocities as
+input and returns a layout together with a drift field in the
+embedding. FlowSNE does so with a Randers cost on both sides; unlike
+\citet{dages2026harnessing} the drift varies in space and is learned, and
+unlike \citet{debaussart2026finslerian} the layout itself is fitted to
+the directed affinity rather than to its symmetric part.

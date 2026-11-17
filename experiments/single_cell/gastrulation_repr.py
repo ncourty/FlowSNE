@@ -41,6 +41,9 @@ control, on all cells and on winnable cell types (direct velocity forward
 for at least half their cells), and the fraction of cells moving forward;
 mean +- std over --seeds (seeds only change FlowSNE's flow initialisation).
 
+Input velocity: --velocity direct (default) or scvelo (scVelo's transition-matrix
+projection, the smoother one gastrulation_markov.py used). Also reports 10-NN
+preservation vs the 30 PCs on a fixed subset of cells.
 Run (GPU):        python experiments/single_cell/gastrulation_repr.py --subset full --n-cells 30000
 Quick test (CPU): python experiments/single_cell/gastrulation_repr.py --subset erythroid --n-cells 1500 \\
                       --iters 60 --seeds 0 --k-chain 30 --tag test
@@ -116,6 +119,12 @@ def main():
     ap.add_argument("--iters", type=int, default=3000)
     ap.add_argument("--lr", type=float, default=0.03)
     ap.add_argument("--perplexity", default="auto")
+    ap.add_argument("--velocity", choices=["direct", "scvelo"], default="direct",
+                    help="input drift: scVelo's gene-space velocity projected directly on our PCA "
+                         "(default), or scVelo's transition-matrix projection (V_pca, as in "
+                         "gastrulation_markov.py; smoother, 67%% of cells forward vs 43%%)")
+    ap.add_argument("--knn-cells", type=int, default=5000,
+                    help="cells on which 10-NN preservation (vs the 30 PCs) is measured")
     ap.add_argument("--tag", default="repr")
     a = ap.parse_args()
 
@@ -132,6 +141,8 @@ def main():
     X100 = d["X_pca100"][ok].astype(np.float64)
     Vd100 = d["V_pca_direct"][ok].astype(np.float64)
     V = Vd100[:, :X.shape[1]]                                  # direct velocity, 30 PCs
+    if a.velocity == "scvelo":
+        V = d["V_pca"][ok].astype(np.float64)[:, :X.shape[1]]
     stage, celltype = d["stage"][ok].astype(np.float64), d["celltype"][ok]
     n = len(X)
     backend = "keops" if (cuda or n > 6000) else None
@@ -150,9 +161,19 @@ def main():
           f"{'/'.join(f'{v:.2f}' for v in info['vel_share_median'].values())}; forward fractions "
           + ", ".join(f"{k} {v:.1%}" for k, v in info["forward_fraction"].items()), flush=True)
 
-    out = dict(args=vars(a), n=n, info=info, scores={})
+    out = dict(args=vars(a), n=n, info=info, scores={}, knn={})
     if os.path.exists(path):
-        out["scores"] = json.load(open(path)).get("scores", {})
+        prev = json.load(open(path))
+        out["scores"], out["knn"] = prev.get("scores", {}), prev.get("knn", {})
+    knn_cells = np.random.default_rng(0).choice(n, size=min(a.knn_cells, n), replace=False)
+    knn_ref = knn(X[knn_cells], 10)
+
+    def knn_score(name, seed, Z):
+        """10-NN preservation (Euclidean, vs the 30 PCs) on a fixed random subset of cells."""
+        nb = knn(Z[knn_cells], 10)
+        v = float(np.mean([len(set(knn_ref[i]) & set(nb[i])) / 10 for i in range(len(knn_cells))]))
+        out["knn"].setdefault(name, {})[f"seed{seed}"] = v
+        return v
 
     def score(name, k, seed, M, M0):
         adv, adv0 = advances(M, stage, a.steps), advances(M0, stage, a.steps)
@@ -176,6 +197,9 @@ def main():
         for dim in a.dims:
             Z = X[:, :dim]
             score(f"pca{dim}", k, 0, chain(Z, V[:, :dim], k), chain(Z, V[:, :dim], k, directed=False))
+    knn_score("input30", 0, X)
+    for dim in a.dims:
+        knn_score(f"pca{dim}", 0, X[:, :dim])
 
     Xt = torch.tensor(X, dtype=dtype, device=device)
     Vt = torch.tensor(V, dtype=dtype, device=device)
@@ -213,12 +237,14 @@ def main():
     for dim in a.dims:
         _, Zs = fitted(f"sym{dim}", dim, 0, P0, idx0, False)       # deterministic
         Zs_np = Zs.cpu().double().numpy()
+        knn_score(f"sym{dim}", 0, Zs_np)
         Fs = project_velocity(X, V, Zs_np)
         for k in a.k_chain:
             score(f"sym{dim}", k, 0, chain(Zs_np, Fs, k), chain(Zs_np, Fs, k, directed=False))
         for seed in a.seeds:
             aff, Z = fitted(f"flowsne{dim}", dim, seed, P, idx, True)
             Z_np = Z.cpu().double().numpy()
+            knn_score(f"flowsne{dim}", seed, Z_np)
             with torch.no_grad():
                 F = (-aff.omega_at(Z)).cpu().double().numpy()
             for k in a.k_chain:
@@ -241,7 +267,7 @@ def write_report(out, res):
     steps = sorted({int(key.split("_s")[1]) for nm in S for k in S[nm] for sd in S[nm][k]
                     for key in S[nm][k][sd] if key.startswith("rel_s") and "winnable" not in key})
     L = [f"# Gastrulation: which representation preserves direction? ({out['args']['subset']}, "
-         f"n = {out['n']})", "",
+         f"n = {out['n']}, input velocity: {out['args'].get('velocity', 'direct')})", "",
          "## Information checks", "",
          "Share of the (log-space) velocity's norm inside the first 30 / 50 / 100 PCs (median over "
          "cells): " + " / ".join(f"{v:.2f}" for v in info["vel_share_median"].values()) +
@@ -268,6 +294,13 @@ def write_report(out, res):
             L.append(f"| {nm} | " + " | ".join(_agg([r[f'rel_s{s}'] for r in rs]) for s in steps) + " | "
                      + " | ".join(_agg([r[f'rel_s{s}_winnable'] for r in rs]) for s in steps)
                      + f" | {_agg([r[f'fwd_s{steps[-1]}'] for r in rs])} |")
+        L.append("")
+    K = out.get("knn", {})
+    if K:
+        L += ["## 10-NN preservation (Euclidean, vs the 30 PCs, "
+              f"{out['args'].get('knn_cells', 5000)} cells)", "",
+              "| representation | kNN |", "|---|---|"]
+        L += [f"| {nm} | {_agg(list(v.values()))} |" for nm, v in K.items()]
         L.append("")
     open(os.path.join(res, "RESULTS.md"), "w", encoding="utf-8").write("\n".join(L) + "\n")
     print("wrote", os.path.join(res, "RESULTS.md"))

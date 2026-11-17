@@ -1,0 +1,69 @@
+% ======================================================================
+\section{Background}
+\label{sec:background}
+
+\paragraph{Affinities are normalised kernels.}
+Given samples $x_1,\dots,x_n\in\R^D$ and a cost matrix $C$, not
+necessarily symmetric, an entropic affinity rescales the rows and columns
+of the Gibbs kernel $K_{ij}=e^{-C_{ij}/\eps}$:
+\begin{equation}
+  P=\diag(\alpha)\,K\,\diag(\beta),\qquad \alpha,\beta\in\R^n_{>0} .
+  \label{eq:scaling}
+\end{equation}
+Normalisations differ in how $\alpha,\beta$ are chosen.
+\begin{itemize}
+  \item \emph{Row-stochastic} ($\RS$), as in SNE: $\beta=\1$ and
+    $\alpha_i=1/(n\,(K\1)_i)$, so that each row is a softmax of
+    $-C_{i\cdot}/\eps$ and $P\1=\1/n$.
+  \item \emph{Balanced} ($\Sk$): $\alpha,\beta$ solve
+    $P\1=P^\top\1=\1/n$ and are found by Sinkhorn iterations
+    \citep{sinkhorn1967concerning,cuturi2013sinkhorn}. $\Sk(C)$ is the
+    entropic optimal self-transport plan for the cost $C$
+    \citep{peyre2019computational}.
+\end{itemize}
+In practice the bandwidth is calibrated per row, $\eps_i$, so that row
+$i$ has a target perplexity
+\citep{hinton2002sne,vladymyrov2013entropic}; this divides row $i$ of
+$C$ by $\eps_i$. SNEkhorn \citep{vanassel2023snekhorn} adds the
+constraint $P=P^\top$, under which $\langle P,C\rangle$ depends only on
+$\tfrac12(C+C^\top)$: it discards any asymmetry of the cost by design.
+
+\paragraph{Embedding kernels.}
+A neighbour embedding fits $Z=(z_1,\dots,z_n)\in\R^{n\times d}$, $d\ll D$,
+by minimising the cross-entropy $-\sum_{ij}P_{ij}\log Q_{ij}(Z)$ between
+the input affinity and an embedding kernel. t-SNE uses the Student
+kernel
+\begin{equation}
+  Q_{ij}=\frac{(1+\|z_i-z_j\|^2)^{-1}}{\sum_{k\neq l}(1+\|z_k-z_l\|^2)^{-1}},
+  \label{eq:student}
+\end{equation}
+whose heavy tail lets moderately distant input points spread out in the
+embedding \citep{vandermaaten2008tsne}. A symmetric $Q$ only sees
+$P+P^\top$: $\sum_{ij}P_{ij}\log Q_{ij}=\tfrac12\sum_{ij}(P_{ij}+P_{ji})\log Q_{ij}$.
+Any direction in $P$ is lost unless the embedding kernel is itself
+asymmetric.
+
+\paragraph{Randers metrics.}
+A Randers norm \eqref{eq:randers} is positive and convex in $v$ if and
+only if $\|\omega(x)\|<1$. The Randers distance is the infimum of the
+length over paths,
+\begin{equation}
+  \dF(x\to y)=\inf_{\gamma(0)=x,\ \gamma(1)=y}\int_0^1 F_{\gamma(t)}\big(\dot\gamma(t)\big)\,dt ,
+  \label{eq:dF}
+\end{equation}
+and is asymmetric, $\dF(x\to y)\neq\dF(y\to x)$. Under
+\eqref{eq:randers}, moving \emph{along} $\omega$ is \emph{more}
+expensive. To make moving with a velocity $v(x)$ cheap, one takes
+$\omega=-c\,v$ with $c>0$ small enough for admissibility; the direction
+an affinity built on $\omega$ favours is $-\omega$. Constant drifts give
+the canonical Randers space of \citet{dages2025finsler}, where
+$\dF(x\to y)=\|y-x\|+\omega^\top(y-x)$ exactly.
+
+\paragraph{Plugging a Randers cost into an affinity.}
+The natural construction is $C_{ij}=\dF(x_i\to x_j)^q$, with $q=2$ as in
+SNE, followed by a normalisation and an embedding. Three questions then
+arise, which the next two sections answer. (i) $\dF$ has no closed form
+when $\omega$ varies, and $\omega$ is only known at the samples: what
+should be computed? (ii) Normalisation rescales rows and columns of a
+directed kernel: what part of the drift survives it? (iii) What
+embedding kernel can express, and be fitted to, the remaining direction?

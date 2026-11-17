@@ -1,0 +1,26 @@
+\begin{abstract}
+  Many datasets come with a direction at each sample: RNA velocity in
+  single-cell transcriptomics, the update a transformer layer applies to
+  its residual stream, the velocity of a generative flow. Neighbour
+  embeddings such as t-SNE build their affinities from a symmetric cost,
+  so they discard this direction, and velocities are usually projected
+  onto the layout afterwards. We introduce FlowSNE, a neighbour
+  embedding in which both the input affinity and the embedding kernel are
+  built from a \emph{Randers} cost, the simplest direction-dependent
+  (Finsler) metric: moving with the drift is cheaper than moving against
+  it. On the input side, closed-form approximations of the Randers
+  distance, with explicit error bounds, turn per-sample velocities into an
+  entropic affinity. We show that its normalisation decides what it
+  encodes: a Sinkhorn-balanced affinity sees the drift only modulo
+  gradients, keeping its circulation and discarding its potential part,
+  while a row-stochastic one keeps both. On the output side, a small
+  neural network fits a drift field in the embedding jointly with the
+  layout, so that the layout and its arrows come from the same model.
+  A KeOps implementation in TorchDR scales to $10^5$ points on one GPU.
+  On synthetic flows and on single-cell datasets up to
+  \tbd{N}~cells, FlowSNE gives better layouts and speed estimates than
+  spectral Finsler embeddings at comparable direction accuracy, and its
+  own directed kernel keeps the developmental progression that
+  symmetric embeddings lose.
+  \todo[inline]{Abstract to be revised once Sections 6.2, 6.3 and 7 exist.}
+\end{abstract}

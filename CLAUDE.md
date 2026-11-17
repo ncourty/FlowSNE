@@ -176,7 +176,14 @@ itself, so a custom flow only needs to output a raw, unconstrained vector.
   approximations + the admissibility reparametrisation), `flows.py`
   (pluggable drift-network architectures + three example builders),
   `affinity.py` (`EntropicRandersAffinity`, `RandersAffinity`),
-  `embedding.py` (`JointAffinityMatcher`, `fit_drift_only`, `fit_embedding`),
+  `embedding.py` (`JointAffinityMatcher`, `fit_drift_only`, `fit_embedding`;
+  `tol`/`field_tol`/`diagnostics` give a convergence test on loss, layout AND
+  field -- with a constant Adam rate the drift network never fully settles),
+  `baselines.py` (constant-drift baselines: Finsler MDS via the authors'
+  vendored corrected SMACOF `_finsler_smacof.py` (BSD-3) on directed graph
+  geodesics, and a Finsler t-SNE reimplementation; alpha picked on each
+  method's own objective; run by `experiments/baselines/
+  finsler_embedding_comparison.py run-finsler`),
   `viz.py` (drawing a fitted flow over a large embedding: the field's
   divergence as background — red source, blue sink — with the mean drift
   per grid cell on top, arrow length in units of |ω| with a legend; also
@@ -185,12 +192,40 @@ itself, so a custom flow only needs to output a raw, unconstrained vector.
   `input_std_norm_flow` — evaluate it on points / std(Z), not raw points).
   Known artefact: sharp ridges where the network switches between
   neighbouring clusters, even where points are present.
-- `experiments/` — `toy/` (synthetic vortex + rotating-sphere), `single_cell/`
+- `experiments/` — `toy/` (synthetic vortex + rotating-sphere), `baselines/` (paper Table 2:
+  sphere, Swiss roll, and `cycle` = attracting ring + exit branch lifted to R^50 with noise,
+  a mixed drift; FlowSNE RS best in direction/speed/kNN-> (0.98/0.81/0.61), balanced 0.95;
+  its layouts fold the ring but stay connected -- `cycle_fold.py`: the fold is the objective
+  (drift discounts forward distances, layout stretches along the flow), not the lift or the
+  schedule; `run-ws` = joint fit warm-started from the symmetric layout, lower loss and rounder;
+  `run-theirs` adds Debaussart-Joniec rows; `report-extra` = warm start + perplexity sweep), `single_cell/`
   (pancreas + dentate gyrus RNA velocity; gastrulation vs real stage; RPE1-FUCCI
   cell cycle, `rpe1_*.py`: labelling velocity from dynamo, FUCCI phase as ground
-  truth, scored by unwrapped phase progress and circulation around the cycle), `mnist/` (gradient-as-drift),
+  truth, scored by unwrapped phase progress and circulation around the cycle;
+  `rpe1_repr.py --balanced`: with a ROW-STOCHASTIC input the fitted field saturates
+  at the bound and is 92-98% gradient (points at hubs, 10-NN 0.11 vs 0.22 sym);
+  with a BALANCED input it is unsaturated, 77% cyclic and circulates around the
+  cycle (0.68 vs 0.39 projected) -- use balanced there; the M->G1 seam is open in
+  the transcriptome (1% of neighbours cross it), no map closes it); `sc_table.py` +
+  `run_sc_table_gpu.sh`: the paper's single-cell table -- full pancreas (3696 cells,
+  same rows/metrics as the toy Table 1, fitted on the GPU, results as
+  `baselines/results/pancreas_full_seed*`) and gastrulation via `gastrulation_repr.py
+  --velocity {scvelo,direct}` (tags `repr_scvelo`, `repr_direct`), written to
+  `single_cell/SC_TABLE.md` + `article/ICML_FlowSNE/tables/single_cell_rows.tex`), `mnist/` (gradient-as-drift),
   `flow_matching/` (a pretrained flow-matching model's own velocity field),
-  `transformer/` (GPT-2 residual-stream updates as drift). Every script
+  `transformer/` (GPT-2 residual-stream updates as drift; `transformer/numbers/`:
+  GPT-2 small at the number / day / month token, every layer. Numbers 0..360:
+  NO helix in GPT-2 small. A Fourier probe decodes cos/sin(2 pi n/T) for T = 2,
+  5, 10, 100 (R^2 ~0.9; T = 3, 7 give 0), but that only shows a categorical
+  last-digit code: after removing decade means, the 10 last-digit centroids are
+  equidistant (no ring order). Layouts, 2-D and 3-D alike (`--dim 3`,
+  `numbers_coil.py`), are a magnitude line with per-decade wiggles; successor
+  drift there is mostly gradient. The residual update h_{l+1}-h_l is ~90% one common vector
+  (a constant drift, gauge under balancing) and orthogonal to the number line.
+  Days/months in 60 contexts: states ~ concept + context additive; at layers
+  6-10 each context is a ring in calendar order already in symmetric t-SNE,
+  FlowSNE's cyclic successor drift turns around it (succ cos 0.6-0.84, turning
+  sign agrees 0.83-1.0), Finsler t-SNE picks alpha = 0. " May" is ambiguous). Every script
   here uses only `flowsne`'s public API — no heat-kernel code paths, no
   exploratory narration; see `FinslerAffinity/CLAUDE.md` for the full
   history of what was tried and why each domain's current setup won out.
